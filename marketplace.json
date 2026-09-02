@@ -1,0 +1,50 @@
+{
+  "name": "brand-ai-readiness-audit",
+  "version": "1.0.0",
+  "description": "Audits any website for AI-discoverability and on-site-engagement failures and emits a single structured report of evidence-backed findings with prioritized, mechanism-sound fixes.",
+  "entrypoint": "audit-orchestrator",
+  "report_schema": "report.schema.json",
+  "skills": [
+    {
+      "id": "audit-orchestrator",
+      "path": "skills/audit-orchestrator",
+      "entrypoint": true,
+      "summary": "Receives the audit request, runs the pipeline, composes every skill's findings into one schema-valid report."
+    },
+    {
+      "id": "site-acquisition",
+      "path": "skills/site-acquisition",
+      "summary": "Robots/sitemap/crawl/render. Produces the shared evidence snapshot and classifies site and page types."
+    },
+    {
+      "id": "machine-readability",
+      "path": "skills/machine-readability",
+      "summary": "Detects content a non-browser client cannot read: JS render gaps, facts locked in non-text, weak semantics."
+    },
+    {
+      "id": "structured-data",
+      "path": "skills/structured-data",
+      "summary": "Checks presence, validity, coverage, type-correctness and text-agreement of schema.org markup."
+    },
+    {
+      "id": "answer-extractability",
+      "path": "skills/answer-extractability",
+      "summary": "Checks whether a clear, self-contained fact can be quoted from a single retrieved chunk."
+    },
+    {
+      "id": "entity-corroboration",
+      "path": "skills/entity-corroboration",
+      "summary": "Checks off-site agreement on the brand's canonical claims and detects entity ambiguity."
+    },
+    {
+      "id": "freshness-provenance",
+      "path": "skills/freshness-provenance",
+      "summary": "Checks dating honesty, staleness markers, dead references and author attribution."
+    },
+    {
+      "id": "engagement-audit",
+      "path": "skills/engagement-audit",
+      "summary": "Checks whether a visitor arriving mid-funnel from an assistant orients, gets an answer and continues."
+    }
+  ]
+}
