@@ -50,18 +50,51 @@ def chunk_paragraphs(text, target=90):
     return out
 
 
+# Host labels that are never the brand: common subdomains and TLD-ish parts.
+NON_BRAND_HOST = {
+    "www", "docs", "doc", "blog", "shop", "store", "app", "apps", "help",
+    "support", "developer", "developers", "api", "kb", "news", "en", "us",
+    "web", "portal", "account", "my", "go", "get", "learn", "community",
+    "com", "org", "net", "io", "co", "gov", "edu", "info", "biz",
+}
+
+
 def brand_tokens(snap):
-    """Best guess at the brand name, from host and home-page title."""
-    host = (snap.get("site") or "").split(".")[0]
-    toks = {host.lower()} if host else set()
+    """Best guess at the brand name, from host and a representative title.
+
+    The host label is chosen carefully: `docs.python.org` must yield `python`,
+    not `docs`, or entity-restatement fires a false positive on the entire
+    documentation of a site whose name it never actually looked for. Subdomain
+    and TLD-ish labels are dropped and the most brand-like remaining label is
+    kept. Title tokens come from the home page when present, otherwise from any
+    titled page, so a sample without a home page still has a brand to check.
+    """
+    host = (snap.get("site") or "").lower()
+    labels = [l for l in host.split(".") if l]
+    brand_label = None
+    for l in labels:
+        if l not in NON_BRAND_HOST and not re.fullmatch(r"[a-z]{2}", l):
+            brand_label = l
+            break
+    toks = {brand_label} if brand_label else set()
+
+    title = None
     for p in snap.get("pages", []):
         if p.get("page_type") == "home" and p.get("title"):
-            parts = re.split(r"[|\-–—:·]", p["title"])
-            if parts:
-                for t in re.findall(r"[A-Za-z]{3,}", parts[-1] + " " + parts[0]):
-                    if t.lower() not in STOPWORDS:
-                        toks.add(t.lower())
+            title = p["title"]
             break
+    if title is None:
+        for p in snap.get("pages", []):
+            if p.get("title"):
+                title = p["title"]
+                break
+    if title:
+        parts = re.split(r"[|\-–—:·]", title)
+        # The brand is usually the shortest, most-repeated segment of a title;
+        # take tokens from the first and last segments, which is where it sits.
+        for t in re.findall(r"[A-Za-z]{3,}", (parts[-1] + " " + parts[0])):
+            if t.lower() not in STOPWORDS:
+                toks.add(t.lower())
     return {t for t in toks if len(t) >= 3}
 
 
@@ -386,7 +419,11 @@ def run(workdir):
 
     # -- 8. Missing meta descriptions ---------------------------------------
     no_desc = [p for p in pages if not p.get("meta_description")]
-    if len(no_desc) > len(pages) * 0.5:
+    if len(pages) < A.MIN_SAMPLE:
+        f.na("AE-NO-META-DESCRIPTION",
+             "Too few pages (%d) to assess description coverage as a proportion."
+             % len(pages))
+    elif len(no_desc) > len(pages) * 0.5:
         f.finding(
             "AE-NO-META-DESCRIPTION",
             "Most pages have no meta description",

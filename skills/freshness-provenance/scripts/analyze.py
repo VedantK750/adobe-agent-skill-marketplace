@@ -21,9 +21,22 @@ SKILL = "freshness-provenance"
 
 YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
 COPYRIGHT_RE = re.compile(r"(?:©|&copy;|copyright)\s*(?:\d{4}\s*[-–]\s*)?(\d{4})", re.I)
+# A time-sensitive *claim*, not merely a word. Bare "hours", "version" or
+# "release" occur constantly in ordinary prose ("we talked for 4 hours", "try
+# your version") and matching them produced false positives on editorial
+# content. Each alternative below requires the operational context that makes
+# the value something a reader would need dated: a currency price, a per-period
+# price, a rate with a number, a stated pricing tier, opening hours, or a
+# numbered software version.
 TIME_SENSITIVE = re.compile(
-    r"\b(price|pricing|cost|fee|rate|plan|tier|hours|availability|in stock|"
-    r"schedule|deadline|version|release)\b", re.I)
+    r"([$£€₹¥]\s?\d"                              # a currency price
+    r"|\b\d+(\.\d+)?\s?(%|per cent)\s*(apr|apy|interest|rate)"  # a rate figure
+    r"|\bprices?\s+(start|from|at)\b"             # "prices from ..."
+    r"|\b(monthly|annual|per month|per year|/mo|/yr)\b.{0,20}[$£€₹¥]?\d"  # per-period price
+    r"|\b(pricing|price)\s+(plan|tier|table)\b"  # a pricing plan/tier/table
+    r"|\bopen(ing)?\s+hours?\b|\bhours?\s*:\s*\d"  # opening hours
+    r"|\bversion\s+\d|\bv\d+\.\d"                 # a numbered version
+    r")", re.I)
 AUTHOR_HINT = re.compile(r"\b(by|author|written by|reviewed by|posted by)\b", re.I)
 DATE_PROPS = ("datepublished", "datemodified", "dateposted")
 
@@ -102,12 +115,19 @@ def run(workdir):
              "No article or documentation pages detected on this site.")
 
     # -- 2. Undated time-sensitive claims -----------------------------------
+    # Product pages are deliberately out of scope: a product page stating its
+    # current price with no date is the norm on every store, so firing there
+    # produces a finding on 100% of a normal ecommerce site — noise, not signal.
+    # Price freshness on products is a structured-data concern (priceValidUntil
+    # on the Offer), handled there. This check targets prose pages — home,
+    # articles, documentation — where an undated price, plan or version claim in
+    # running text genuinely risks a superseded figure being repeated.
+    TS_SCOPE = ("home", "documentation", "article")
     risky = [p for p in pages
              if TIME_SENSITIVE.search(p.get("body_text") or "")
              and not jsonld_dates(p)
-             and p.get("page_type") in ("product", "home", "documentation", "article")]
-    scope = [p for p in pages
-             if p.get("page_type") in ("product", "home", "documentation", "article")]
+             and p.get("page_type") in TS_SCOPE]
+    scope = [p for p in pages if p.get("page_type") in TS_SCOPE]
     if risky and scope:
         f.finding(
             "FP-UNDATED-TIME-SENSITIVE",
@@ -138,18 +158,26 @@ def run(workdir):
              "No undated time-sensitive pages detected.")
 
     # -- 3. Stale copyright --------------------------------------------------
+    # A copyright line is very often a range ("© 2001-2024"). What matters is
+    # the LATEST year it names, not the first: "2001-2025" on a 2026 run is
+    # current, and reading the 2001 as the copyright year would be a false
+    # positive. So take the maximum plausible year within the copyright span,
+    # tolerant of whatever dash or entity separates a range.
     stale_years = []
     for p in pages:
         m = COPYRIGHT_RE.search(p.get("text") or "")
-        if m:
-            try:
-                year = int(m.group(1))
-            except ValueError:
-                continue
-            if year < NOW.year - 1:
-                stale_years.append((p, year))
+        if not m:
+            continue
+        span = (p.get("text") or "")[m.start():m.start() + 40]
+        years = [int(y) for y in re.findall(r"\b(20\d{2}|19\d{2})\b", span)
+                 if 1990 <= int(y) <= NOW.year + 1]
+        if not years:
+            continue
+        year = max(years)
+        if year < NOW.year - 1:
+            stale_years.append((p, year))
     if stale_years:
-        oldest = min(y for _, y in stale_years)
+        newest = max(y for _, y in stale_years)
         f.finding(
             "FP-STALE-COPYRIGHT",
             "Footer copyright year is years out of date",
@@ -158,8 +186,8 @@ def run(workdir):
             "that the site is unmaintained, and it appears on every page. It "
             "invites a consumer to discount otherwise current content.",
             A.ratio_evidence("HTML pages", len(stale_years), len(pages),
-                             "Oldest year seen: %d (current year %d)."
-                             % (oldest, NOW.year)),
+                             "Most recent copyright year seen: %d (current year "
+                             "%d)." % (newest, NOW.year)),
             impact="weakening", affected=len(stale_years), sampled=len(pages),
             affected_urls=[p["final_url"] for p, _ in stale_years],
             action={

@@ -1,0 +1,31 @@
+{
+  "findings": [],
+  "inconclusive": [],
+  "not_applicable": [
+    {
+      "check_id": "FP-NO-DATES",
+      "reason": "No article or documentation pages detected on this site."
+    },
+    {
+      "check_id": "FP-UNDATED-TIME-SENSITIVE",
+      "reason": "No undated time-sensitive pages detected."
+    },
+    {
+      "check_id": "FP-STALE-COPYRIGHT",
+      "reason": "No stale copyright year detected."
+    },
+    {
+      "check_id": "FP-LASTMOD-UNIFORM",
+      "reason": "Sitemap lastmod values vary across entries."
+    },
+    {
+      "check_id": "FP-NO-AUTHOR",
+      "reason": "No article pages detected on this site."
+    },
+    {
+      "check_id": "FP-STALE-YEAR-HEADINGS",
+      "reason": "No stale year references in headings."
+    }
+  ],
+  "skill": "freshness-provenance"
+}

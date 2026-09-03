@@ -1,0 +1,18 @@
+{
+  "site": "127.0.0.1:8898",
+  "claims": {
+    "name": "Northwind Tooling",
+    "description": "Northwind Tooling is a precision tooling manufacturer serving aerospace suppliers across the UK.",
+    "site_type": "local-business",
+    "phones": [
+      "+442079460991"
+    ],
+    "has_address_signal": true
+  },
+  "queries": [
+    "\"Northwind Tooling\"",
+    "\"Northwind Tooling\" review",
+    "\"Northwind Tooling\" local-business",
+    "Northwind Tooling -site:127.0.0.1:8898"
+  ]
+}

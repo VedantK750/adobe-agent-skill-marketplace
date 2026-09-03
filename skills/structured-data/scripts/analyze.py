@@ -32,7 +32,15 @@ PRICE_RE = re.compile(r"(?:[$£€₹¥])\s?(\d[\d,]*(?:\.\d{2})?)")
 
 
 def parse_nodes(page):
-    """Every JSON-LD node on the page, plus any parse errors."""
+    """Every JSON-LD node on the page, plus genuine parse errors.
+
+    A block that does not close cleanly (last non-space char is not } or ]) is
+    treated as *truncated by capture*, not invalid markup, and is skipped
+    rather than reported — capturing a snapshot must never manufacture an
+    SD-INVALID-JSON finding. Blocks that fail only on stray control characters
+    are retried once with those stripped, since a raw newline inside a string
+    is a common, harmless authoring slip that consumers tolerate.
+    """
     nodes, errors = [], []
     for raw in page.get("jsonld_raw", []) or []:
         text = (raw or "").strip()
@@ -41,8 +49,13 @@ def parse_nodes(page):
         try:
             data = json.loads(text)
         except Exception as exc:
-            errors.append(str(exc)[:120])
-            continue
+            if text[-1:] not in ("}", "]"):
+                continue  # truncated at capture, not a real error
+            try:
+                data = json.loads(re.sub(r"[\x00-\x1f]+", " ", text))
+            except Exception:
+                errors.append(str(exc)[:120])
+                continue
         stack = [data]
         while stack:
             node = stack.pop()

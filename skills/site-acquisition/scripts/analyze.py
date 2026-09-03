@@ -108,6 +108,8 @@ def run(workdir):
                                    "those reachable by following links.",
                 "verification": "GET /robots.txt returns 200 with a Sitemap line.",
             })
+    else:
+        f.na("ACC-NO-ROBOTS", "robots.txt served (HTTP 200).")
 
     # -- sitemap -------------------------------------------------------------
     sm = snap.get("sitemap", {})
@@ -193,9 +195,15 @@ def run(workdir):
         f.na("ACC-REDIRECT-CHAINS", "No multi-hop redirect chains observed.")
 
     # -- snippet suppression -------------------------------------------------
+    # noindex/nosnippet on legal boilerplate (terms, addenda, cardholder
+    # agreements) is deliberate and correct: those thin, near-duplicate pages
+    # are meant to stay out of the index. Flagging them as a discoverability
+    # defect is a false positive, so pages classified `legal` are excluded here.
     html_pages = A.ok_pages(snap)
+    considered = [p for p in html_pages if p.get("page_type") != "legal"]
+    excluded_legal = len(html_pages) - len(considered)
     suppressed = []
-    for p in html_pages:
+    for p in considered:
         directives = " ".join(filter(None, [
             (p.get("meta_robots") or ""),
             (p.get("headers", {}) or {}).get("x-robots-tag", ""),
@@ -203,7 +211,11 @@ def run(workdir):
         if re.search(r"\b(noindex|nosnippet|none)\b", directives) or \
            re.search(r"max-snippet:\s*0", directives):
             suppressed.append(p)
-    if suppressed:
+    if not considered:
+        f.na("ACC-SNIPPET-SUPPRESSED",
+             "Only legal/boilerplate pages were sampled; suppression on those "
+             "is expected and not evaluated.")
+    elif suppressed:
         f.finding(
             "ACC-SNIPPET-SUPPRESSED",
             "Pages carry directives that block indexing or quotation",
@@ -211,8 +223,11 @@ def run(workdir):
             "noindex removes the page from the index; nosnippet and "
             "max-snippet:0 permit indexing but forbid quoting any text, which "
             "prevents the page being used as a cited source even when it ranks.",
-            A.ratio_evidence("HTML pages", len(suppressed), len(html_pages)),
-            impact="blocking", affected=len(suppressed), sampled=len(html_pages),
+            A.ratio_evidence(
+                "non-legal HTML pages", len(suppressed), len(considered),
+                ("%d legal page(s) excluded as intentionally noindexed."
+                 % excluded_legal) if excluded_legal else ""),
+            impact="blocking", affected=len(suppressed), sampled=len(considered),
             affected_urls=[p["final_url"] for p in suppressed],
             action={
                 "summary": "Remove noindex/nosnippet from pages that should be "

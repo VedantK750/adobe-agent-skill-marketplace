@@ -1,0 +1,43 @@
+{
+  "findings": [],
+  "inconclusive": [],
+  "not_applicable": [
+    {
+      "check_id": "SD-INVALID-JSON",
+      "reason": "All JSON-LD blocks parse cleanly."
+    },
+    {
+      "check_id": "SD-COVERAGE-PRODUCT",
+      "reason": "No product pages detected on this site."
+    },
+    {
+      "check_id": "SD-COVERAGE-ARTICLE",
+      "reason": "No article pages detected on this site."
+    },
+    {
+      "check_id": "SD-COVERAGE-DOCUMENTATION",
+      "reason": "No documentation pages detected on this site."
+    },
+    {
+      "check_id": "SD-COVERAGE-CONTACT",
+      "reason": "All 1 contact pages carry the expected type."
+    },
+    {
+      "check_id": "SD-COVERAGE-HOME",
+      "reason": "All 1 home pages carry the expected type."
+    },
+    {
+      "check_id": "SD-INCOMPLETE-PROPS",
+      "reason": "Declared nodes carry their required properties."
+    },
+    {
+      "check_id": "SD-NO-SAMEAS",
+      "reason": "Organization node declares sameAs links."
+    },
+    {
+      "check_id": "SD-TEXT-CONFLICT",
+      "reason": "No price disagreement detected between markup and visible text."
+    }
+  ],
+  "skill": "structured-data"
+}

@@ -1,0 +1,47 @@
+{
+  "findings": [],
+  "inconclusive": [],
+  "not_applicable": [
+    {
+      "check_id": "EN-NO-VIEWPORT",
+      "reason": "Viewport declared on most pages."
+    },
+    {
+      "check_id": "EN-HEAVY-PAGES",
+      "reason": "No landing-candidate page exceeds 2.5 MB."
+    },
+    {
+      "check_id": "EN-SLOW-RESPONSE",
+      "reason": "Response times within tolerance."
+    },
+    {
+      "check_id": "EN-DEAD-END-PAGES",
+      "reason": "Landing pages offer onward navigation."
+    },
+    {
+      "check_id": "EN-NO-ORIENTATION",
+      "reason": "Navigation landmark present on most pages."
+    },
+    {
+      "check_id": "EN-NO-CTA",
+      "reason": "Conversion-relevant pages state a next action."
+    },
+    {
+      "check_id": "EN-AUTOPLAY-MEDIA",
+      "reason": "No autoplaying media detected."
+    },
+    {
+      "check_id": "EN-INTERRUPTIONS",
+      "reason": "No site-wide arrival interruption pattern found."
+    },
+    {
+      "check_id": "EN-CONSENT-BLOCKS-CONTENT",
+      "reason": "No pages appear to be dominated by consent copy."
+    },
+    {
+      "check_id": "EN-NO-SITE-SEARCH",
+      "reason": "Site has fewer than 15 crawled pages; search is not yet material."
+    }
+  ],
+  "skill": "engagement-audit"
+}

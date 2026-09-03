@@ -1,0 +1,52 @@
+{
+  "findings": [
+    {
+      "affected_urls": [],
+      "category": "discoverability",
+      "check_id": "EC-FEW-EXTERNAL-PROFILES",
+      "confidence": "high",
+      "evidence": "Distinct external identity platforms linked from the site: none.",
+      "impact": "weakening",
+      "mechanism": "External profiles are the paths by which a machine connects this site to independent descriptions of the same entity. With no such links, corroborating evidence \u2014 if it exists at all \u2014 may never be tied back to this brand.",
+      "page_importance": "normal",
+      "prevalence": {
+        "affected": 1,
+        "sampled": 1
+      },
+      "skill": "entity-corroboration",
+      "suggested_action": {
+        "effort": "low",
+        "expected_impact": "External mentions become attributable to this entity.",
+        "steps": [
+          "Add footer links to the brand's official profiles.",
+          "List the identical URLs in the Organization sameAs array.",
+          "Claim any authoritative directory listing for the sector that is currently unclaimed."
+        ],
+        "summary": "Link every official profile from the site and mirror the same set in Organization.sameAs.",
+        "verification": "Two or more distinct platforms linked."
+      },
+      "title": "The site links to almost no external profiles"
+    }
+  ],
+  "inconclusive": [
+    {
+      "check_id": "EC-SINGLE-SOURCE-CLAIMS",
+      "reason": "Off-site corroboration requires a search capability, which was not available on this run. A query worklist has been written to corroboration_targets.json for the agent procedure to complete."
+    },
+    {
+      "check_id": "EC-NAME-COLLISION",
+      "reason": "Entity-ambiguity detection requires a search capability, which was not available on this run. See corroboration_targets.json."
+    }
+  ],
+  "not_applicable": [
+    {
+      "check_id": "EC-NAP-INCOMPLETE",
+      "reason": "Site type is ecommerce, not a place-based business."
+    },
+    {
+      "check_id": "EC-INCONSISTENT-SELF-DESCRIPTION",
+      "reason": "Home title and og:title agree; no description to compare."
+    }
+  ],
+  "skill": "entity-corroboration"
+}

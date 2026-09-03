@@ -1,0 +1,74 @@
+{
+  "findings": [
+    {
+      "affected_urls": [
+        "http://127.0.0.1:8897/",
+        "http://127.0.0.1:8897/p/widget.html"
+      ],
+      "category": "engagement",
+      "check_id": "EN-DEAD-END-PAGES",
+      "confidence": "high",
+      "evidence": "2/2 landing-candidate pages affected (100.0%). Fewer than three internal links each.",
+      "impact": "degrading",
+      "mechanism": "A visitor arriving mid-funnel has not seen the home page and has no mental model of the site. A page with no onward links answers one question and then ends the session, forfeiting every subsequent step.",
+      "page_importance": "normal",
+      "prevalence": {
+        "affected": 2,
+        "sampled": 2
+      },
+      "skill": "engagement-audit",
+      "suggested_action": {
+        "effort": "medium",
+        "expected_impact": "Deep arrivals continue into a second and third page instead of leaving.",
+        "steps": [
+          "Link to the two or three most relevant related pages from within the body copy.",
+          "Add a related-content block at the end of each page.",
+          "Ensure primary navigation is reachable from every page."
+        ],
+        "summary": "Add contextual onward links and a clear next step to every content page.",
+        "verification": "All landing pages carry three or more internal links."
+      },
+      "title": "Landing pages offer almost no onward links"
+    }
+  ],
+  "inconclusive": [],
+  "not_applicable": [
+    {
+      "check_id": "EN-NO-VIEWPORT",
+      "reason": "Viewport declared on most pages."
+    },
+    {
+      "check_id": "EN-HEAVY-PAGES",
+      "reason": "No landing-candidate page exceeds 2.5 MB."
+    },
+    {
+      "check_id": "EN-SLOW-RESPONSE",
+      "reason": "Response times within tolerance."
+    },
+    {
+      "check_id": "EN-NO-ORIENTATION",
+      "reason": "Navigation landmark present on most pages."
+    },
+    {
+      "check_id": "EN-NO-CTA",
+      "reason": "Conversion-relevant pages state a next action."
+    },
+    {
+      "check_id": "EN-AUTOPLAY-MEDIA",
+      "reason": "No autoplaying media detected."
+    },
+    {
+      "check_id": "EN-INTERRUPTIONS",
+      "reason": "No site-wide arrival interruption pattern found."
+    },
+    {
+      "check_id": "EN-CONSENT-BLOCKS-CONTENT",
+      "reason": "No pages appear to be dominated by consent copy."
+    },
+    {
+      "check_id": "EN-NO-SITE-SEARCH",
+      "reason": "Site has fewer than 15 crawled pages; search is not yet material."
+    }
+  ],
+  "skill": "engagement-audit"
+}

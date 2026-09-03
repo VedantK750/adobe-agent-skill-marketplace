@@ -1,0 +1,190 @@
+{
+  "audited_at": "2026-09-03T17:23:55Z",
+  "base_url": "http://127.0.0.1:8899/",
+  "blocked_by_robots": [],
+  "crawl": {
+    "delay_seconds": 0.4,
+    "low_value_cap": 4,
+    "max_pages": 20,
+    "pages_crawled": 3,
+    "pages_fetched": 3,
+    "pages_skipped_quota": 0,
+    "runtime_seconds": 1.4,
+    "type_cap": 8,
+    "user_agent": "brand-ai-readiness-audit/1.0 (read-only site audit; respects robots.txt)"
+  },
+  "pages": [
+    {
+      "body_text": "Home \u00a9 2019 Acme widget post",
+      "bytes": 333,
+      "canonical": null,
+      "content_type": "text/html",
+      "elapsed_ms": 2,
+      "error": null,
+      "final_url": "http://127.0.0.1:8899/",
+      "forms": 0,
+      "h1": [],
+      "has_breadcrumb": false,
+      "has_main": false,
+      "has_microdata": false,
+      "has_nav": false,
+      "headers": {
+        "content-type": "text/html",
+        "last-modified": "Thu, 03 Sep 2026 17:22:55 GMT",
+        "server": "SimpleHTTP/0.6 Python/3.14.4"
+      },
+      "headings": [],
+      "iframes": [],
+      "images": [],
+      "internal_links": 2,
+      "jsonld_raw": [],
+      "meta_description": null,
+      "meta_robots": null,
+      "og_title": null,
+      "outbound_links": [],
+      "page_type": "home",
+      "raw_html": "<!DOCTYPE html><html><head><title>Home</title></head>\n<body><div id=\"root\"></div>\n<script src=\"a.js\"></script><script src=\"b.js\"></script><script src=\"c.js\"></script>\n<script src=\"d.js\"></script><script src=\"e.js\"></script>\n<p>&copy; 2019 Acme</p>\n<a href=\"/p/widget.html\">widget</a><a href=\"/blog/post.html\">post</a>\n</body></html>\n",
+      "redirect_chain": [],
+      "scripts": 5,
+      "status": 200,
+      "stylesheets": 0,
+      "text": "Home \u00a9 2019 Acme widget post",
+      "title": "Home",
+      "url": "http://127.0.0.1:8899/",
+      "viewport": null
+    },
+    {
+      "body_text": "Home Widget Also Widget It is great. They love it. This is why. home",
+      "bytes": 209,
+      "canonical": null,
+      "content_type": "text/html",
+      "elapsed_ms": 1,
+      "error": null,
+      "final_url": "http://127.0.0.1:8899/p/widget.html",
+      "forms": 0,
+      "h1": [
+        "Widget",
+        "Also Widget"
+      ],
+      "has_breadcrumb": false,
+      "has_main": false,
+      "has_microdata": false,
+      "has_nav": false,
+      "headers": {
+        "content-type": "text/html",
+        "last-modified": "Thu, 03 Sep 2026 17:22:55 GMT",
+        "server": "SimpleHTTP/0.6 Python/3.14.4"
+      },
+      "headings": [
+        {
+          "id": null,
+          "level": 1,
+          "text": "Widget"
+        },
+        {
+          "id": null,
+          "level": 1,
+          "text": "Also Widget"
+        }
+      ],
+      "iframes": [],
+      "images": [
+        {
+          "alt": null,
+          "height": null,
+          "src": "http://127.0.0.1:8899/p/pricing-table.png",
+          "width": null
+        }
+      ],
+      "internal_links": 1,
+      "jsonld_raw": [],
+      "meta_description": null,
+      "meta_robots": null,
+      "og_title": null,
+      "outbound_links": [],
+      "page_type": "product",
+      "raw_html": "<!DOCTYPE html><html><head><title>Home</title></head><body>\n<h1>Widget</h1><h1>Also Widget</h1>\n<p>It is great. They love it. This is why.</p>\n<img src=\"pricing-table.png\">\n<a href=\"/\">home</a>\n</body></html>\n",
+      "redirect_chain": [],
+      "scripts": 0,
+      "status": 200,
+      "stylesheets": 0,
+      "text": "Home Widget Also Widget It is great. They love it. This is why. home",
+      "title": "Home",
+      "url": "http://127.0.0.1:8899/p/widget.html",
+      "viewport": null
+    },
+    {
+      "body_text": "Home What is a widget? Before we get into that, let us take a long detour through history and consider many things at length, because context matters enormously and we have a great deal to say about the origins of manufacturing in general before arriving at anything resembling a direct answer to the question posed above in the heading.",
+      "bytes": 424,
+      "canonical": null,
+      "content_type": "text/html",
+      "elapsed_ms": 2,
+      "error": null,
+      "final_url": "http://127.0.0.1:8899/blog/post.html",
+      "forms": 0,
+      "h1": [],
+      "has_breadcrumb": false,
+      "has_main": false,
+      "has_microdata": false,
+      "has_nav": false,
+      "headers": {
+        "content-type": "text/html",
+        "last-modified": "Thu, 03 Sep 2026 17:22:55 GMT",
+        "server": "SimpleHTTP/0.6 Python/3.14.4"
+      },
+      "headings": [
+        {
+          "id": null,
+          "level": 2,
+          "text": "What is a widget?"
+        }
+      ],
+      "iframes": [],
+      "images": [],
+      "internal_links": 0,
+      "jsonld_raw": [],
+      "meta_description": null,
+      "meta_robots": null,
+      "og_title": null,
+      "outbound_links": [],
+      "page_type": "article",
+      "raw_html": "<!DOCTYPE html><html><head><title>Home</title></head><body>\n<h2>What is a widget?</h2>\n<p>Before we get into that, let us take a long detour through history and consider many things at length, because context matters enormously and we have a great deal to say about the origins of manufacturing in general before arriving at anything resembling a direct answer to the question posed above in the heading.</p>\n</body></html>\n",
+      "redirect_chain": [],
+      "scripts": 0,
+      "status": 200,
+      "stylesheets": 0,
+      "text": "Home What is a widget? Before we get into that, let us take a long detour through history and consider many things at length, because context matters enormously and we have a great deal to say about the origins of manufacturing in general before arriving at anything resembling a direct answer to the question posed above in the heading.",
+      "title": "Home",
+      "url": "http://127.0.0.1:8899/blog/post.html",
+      "viewport": null
+    }
+  ],
+  "render_mode": "static-only",
+  "robots": {
+    "ai_agents_blocked": [
+      "GPTBot"
+    ],
+    "blanket_disallow": false,
+    "body": "User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n",
+    "parse_error": null,
+    "present": true,
+    "sitemaps": [],
+    "status": 200,
+    "url": "http://127.0.0.1:8899/robots.txt"
+  },
+  "robots_respected": true,
+  "site": "127.0.0.1:8899",
+  "site_type": "ecommerce",
+  "sitemap": {
+    "checked": [
+      "http://127.0.0.1:8899/sitemap.xml"
+    ],
+    "errors": [
+      "http://127.0.0.1:8899/sitemap.xml -> 404"
+    ],
+    "found": false,
+    "lastmod": {},
+    "url_count": 0
+  },
+  "sitemap_urls": []
+}

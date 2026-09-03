@@ -1,0 +1,16 @@
+{
+  "site": "127.0.0.1:8897",
+  "claims": {
+    "name": "Gadget Store",
+    "description": "Gadget Store sells widgets.",
+    "site_type": "ecommerce",
+    "phones": [],
+    "has_address_signal": false
+  },
+  "queries": [
+    "\"Gadget Store\"",
+    "\"Gadget Store\" review",
+    "\"Gadget Store\" ecommerce",
+    "Gadget Store -site:127.0.0.1:8897"
+  ]
+}

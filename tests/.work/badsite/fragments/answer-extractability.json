@@ -1,0 +1,11 @@
+{
+  "findings": [],
+  "inconclusive": [
+    {
+      "check_id": "AE-ALL",
+      "reason": "No page carried 120+ words of extractable body text, so prose quality could not be assessed. Resolve the machine-readability findings first."
+    }
+  ],
+  "not_applicable": [],
+  "skill": "answer-extractability"
+}

@@ -172,7 +172,12 @@ def run(workdir):
         f.na("EN-DEAD-END-PAGES", "Landing pages offer onward navigation.")
 
     # -- 4. Orientation ------------------------------------------------------
-    no_nav = [p for p in landing if not p.get("has_nav")]
+    # Either a navigation landmark or breadcrumbs give a deep arrival somewhere
+    # to orient from. Breadcrumbs alone are orientation, so a page that has them
+    # is not a finding even without a <nav> element — counting it as one was a
+    # false positive on sites that navigate purely by breadcrumb trail.
+    no_nav = [p for p in landing
+              if not p.get("has_nav") and not p.get("has_breadcrumb")]
     if len(no_nav) > len(landing) * 0.4:
         f.finding(
             "EN-NO-ORIENTATION",

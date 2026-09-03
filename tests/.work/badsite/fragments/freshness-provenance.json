@@ -1,0 +1,107 @@
+{
+  "findings": [
+    {
+      "affected_urls": [
+        "http://127.0.0.1:8899/blog/post.html"
+      ],
+      "category": "discoverability",
+      "check_id": "FP-NO-DATES",
+      "confidence": "high",
+      "evidence": "1/1 dated-content pages affected (100.0%). No datePublished or dateModified in markup.",
+      "impact": "weakening",
+      "mechanism": "Recency is one of the few quality signals available without reading the content. An undated page cannot be preferred over an older competitor, and cannot be ruled out as stale either, so it tends to be passed over when a current answer is wanted.",
+      "page_importance": "normal",
+      "prevalence": {
+        "affected": 1,
+        "sampled": 1
+      },
+      "skill": "freshness-provenance",
+      "suggested_action": {
+        "effort": "low",
+        "example": "\"datePublished\":\"2026-03-14\",\"dateModified\":\"2026-08-02\"",
+        "expected_impact": "Recency becomes assessable.",
+        "steps": [
+          "Add datePublished and dateModified in ISO-8601 to the Article node.",
+          "Show the date visibly near the headline.",
+          "Update dateModified only on genuine content changes."
+        ],
+        "summary": "Emit datePublished and dateModified in JSON-LD and show a visible date.",
+        "verification": "Dates present on most content pages."
+      },
+      "title": "Articles and documentation carry no machine-readable date"
+    },
+    {
+      "affected_urls": [
+        "http://127.0.0.1:8899/"
+      ],
+      "category": "discoverability",
+      "check_id": "FP-STALE-COPYRIGHT",
+      "confidence": "high",
+      "evidence": "1/3 HTML pages affected (33.3%). Most recent copyright year seen: 2019 (current year 2026).",
+      "impact": "weakening",
+      "mechanism": "A visibly outdated copyright line is a cheap, prominent signal that the site is unmaintained, and it appears on every page. It invites a consumer to discount otherwise current content.",
+      "page_importance": "normal",
+      "prevalence": {
+        "affected": 1,
+        "sampled": 3
+      },
+      "skill": "freshness-provenance",
+      "suggested_action": {
+        "effort": "low",
+        "expected_impact": "Removes a prominent staleness signal.",
+        "steps": [
+          "Generate the year at build or request time.",
+          "Treat this as a symptom and check what else has not been reviewed since that year."
+        ],
+        "summary": "Render the copyright year dynamically.",
+        "verification": "Copyright reflects the current year."
+      },
+      "title": "Footer copyright year is years out of date"
+    },
+    {
+      "affected_urls": [
+        "http://127.0.0.1:8899/blog/post.html"
+      ],
+      "category": "discoverability",
+      "check_id": "FP-NO-AUTHOR",
+      "confidence": "high",
+      "evidence": "1/1 article pages affected (100.0%).",
+      "impact": "weakening",
+      "mechanism": "Attribution is a provenance signal: content traceable to a named, credentialed person is weighted more heavily than anonymous copy, particularly on subjects where expertise matters.",
+      "page_importance": "normal",
+      "prevalence": {
+        "affected": 1,
+        "sampled": 1
+      },
+      "skill": "freshness-provenance",
+      "suggested_action": {
+        "effort": "medium",
+        "expected_impact": "Content gains assessable provenance.",
+        "steps": [
+          "Add a Person author node to Article markup.",
+          "Publish author pages stating relevant credentials.",
+          "Link the author page from every byline."
+        ],
+        "summary": "Attribute every article to a named author with an author page.",
+        "verification": "Author attribution on most articles."
+      },
+      "title": "Articles carry no author attribution"
+    }
+  ],
+  "inconclusive": [],
+  "not_applicable": [
+    {
+      "check_id": "FP-UNDATED-TIME-SENSITIVE",
+      "reason": "No undated time-sensitive pages detected."
+    },
+    {
+      "check_id": "FP-LASTMOD-UNIFORM",
+      "reason": "No lastmod values available to assess."
+    },
+    {
+      "check_id": "FP-STALE-YEAR-HEADINGS",
+      "reason": "No stale year references in headings."
+    }
+  ],
+  "skill": "freshness-provenance"
+}

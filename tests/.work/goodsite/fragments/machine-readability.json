@@ -1,0 +1,40 @@
+{
+  "findings": [],
+  "inconclusive": [
+    {
+      "check_id": "MR-RENDER-GAP",
+      "reason": "No headless browser available on this run, so raw and rendered text could not be compared. Install Playwright to evaluate this check. A static-HTML proxy check was run instead (MR-EMPTY-SHELL)."
+    }
+  ],
+  "not_applicable": [
+    {
+      "check_id": "MR-EMPTY-SHELL",
+      "reason": "All pages return meaningful body text in the raw response."
+    },
+    {
+      "check_id": "MR-FACTS-IN-IMAGES",
+      "reason": "No text-sparse pages depend on unlabelled fact-bearing images."
+    },
+    {
+      "check_id": "MR-ALT-COVERAGE",
+      "reason": "Too few content images (0) to assess coverage reliably."
+    },
+    {
+      "check_id": "MR-NO-H1",
+      "reason": "H1 present on 3/3 pages."
+    },
+    {
+      "check_id": "MR-MULTI-H1",
+      "reason": "Heading hierarchy has a single H1 on most pages."
+    },
+    {
+      "check_id": "MR-NO-MAIN-LANDMARK",
+      "reason": "Main landmark present on most pages."
+    },
+    {
+      "check_id": "MR-IFRAME-CONTENT",
+      "reason": "No text-sparse iframe-dependent pages found."
+    }
+  ],
+  "skill": "machine-readability"
+}

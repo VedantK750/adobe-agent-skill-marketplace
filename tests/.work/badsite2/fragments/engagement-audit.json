@@ -1,0 +1,156 @@
+{
+  "findings": [
+    {
+      "affected_urls": [
+        "http://127.0.0.1:8899/",
+        "http://127.0.0.1:8899/blog/post.html",
+        "http://127.0.0.1:8899/p/widget.html"
+      ],
+      "category": "engagement",
+      "check_id": "EN-NO-VIEWPORT",
+      "confidence": "high",
+      "evidence": "3/3 HTML pages affected (100.0%).",
+      "impact": "degrading",
+      "mechanism": "Assistant referrals arrive disproportionately on phones. Without a viewport declaration the page renders at desktop width and is zoomed out to illegibility, which produces an immediate bounce before any content is read.",
+      "page_importance": "high",
+      "prevalence": {
+        "affected": 3,
+        "sampled": 3
+      },
+      "skill": "engagement-audit",
+      "suggested_action": {
+        "effort": "low",
+        "example": "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+        "expected_impact": "Mobile arrivals can read the page without zooming.",
+        "steps": [
+          "Add the viewport meta tag to the base template.",
+          "Verify body text renders at 16px or larger on mobile.",
+          "Check tap targets are at least 44px."
+        ],
+        "summary": "Add a responsive viewport meta tag to every template.",
+        "verification": "Viewport present on all pages."
+      },
+      "title": "Pages declare no mobile viewport"
+    },
+    {
+      "affected_urls": [
+        "http://127.0.0.1:8899/",
+        "http://127.0.0.1:8899/blog/post.html",
+        "http://127.0.0.1:8899/p/widget.html"
+      ],
+      "category": "engagement",
+      "check_id": "EN-DEAD-END-PAGES",
+      "confidence": "high",
+      "evidence": "3/3 landing-candidate pages affected (100.0%). Fewer than three internal links each.",
+      "impact": "degrading",
+      "mechanism": "A visitor arriving mid-funnel has not seen the home page and has no mental model of the site. A page with no onward links answers one question and then ends the session, forfeiting every subsequent step.",
+      "page_importance": "normal",
+      "prevalence": {
+        "affected": 3,
+        "sampled": 3
+      },
+      "skill": "engagement-audit",
+      "suggested_action": {
+        "effort": "medium",
+        "expected_impact": "Deep arrivals continue into a second and third page instead of leaving.",
+        "steps": [
+          "Link to the two or three most relevant related pages from within the body copy.",
+          "Add a related-content block at the end of each page.",
+          "Ensure primary navigation is reachable from every page."
+        ],
+        "summary": "Add contextual onward links and a clear next step to every content page.",
+        "verification": "All landing pages carry three or more internal links."
+      },
+      "title": "Landing pages offer almost no onward links"
+    },
+    {
+      "affected_urls": [
+        "http://127.0.0.1:8899/",
+        "http://127.0.0.1:8899/blog/post.html",
+        "http://127.0.0.1:8899/p/widget.html"
+      ],
+      "category": "engagement",
+      "check_id": "EN-NO-ORIENTATION",
+      "confidence": "high",
+      "evidence": "3/3 landing-candidate pages affected (100.0%).",
+      "impact": "weakening",
+      "mechanism": "Someone who lands deep in the site needs to know where they are and what else exists. Without navigation or breadcrumbs the page is an island, and the visitor cannot tell whether the rest of the site is worth exploring.",
+      "page_importance": "normal",
+      "prevalence": {
+        "affected": 3,
+        "sampled": 3
+      },
+      "skill": "engagement-audit",
+      "suggested_action": {
+        "effort": "low",
+        "expected_impact": "Deep arrivals orient and explore.",
+        "steps": [
+          "Include a <nav> landmark on all pages.",
+          "Add breadcrumbs showing the path from home.",
+          "Mark breadcrumbs up with BreadcrumbList JSON-LD."
+        ],
+        "summary": "Add persistent navigation and breadcrumbs to every template.",
+        "verification": "Navigation present on most pages."
+      },
+      "title": "Pages provide no navigation landmark for orientation"
+    },
+    {
+      "affected_urls": [
+        "http://127.0.0.1:8899/",
+        "http://127.0.0.1:8899/p/widget.html"
+      ],
+      "category": "engagement",
+      "check_id": "EN-NO-CTA",
+      "confidence": "medium",
+      "evidence": "2/2 conversion-relevant pages affected (100.0%).",
+      "impact": "degrading",
+      "mechanism": "A visitor whose question has just been answered is at peak intent. With no explicit next step on the page, that intent expires where it stands.",
+      "page_importance": "normal",
+      "prevalence": {
+        "affected": 2,
+        "sampled": 2
+      },
+      "skill": "engagement-audit",
+      "suggested_action": {
+        "effort": "low",
+        "expected_impact": "Intent converts at the moment it peaks.",
+        "steps": [
+          "Name the action concretely rather than using 'learn more'.",
+          "Keep one primary action per page.",
+          "Place it where the answer finishes, not only in the header."
+        ],
+        "summary": "Give each page one primary, explicit call to action in text.",
+        "verification": "Every conversion page states an action."
+      },
+      "title": "Conversion-relevant pages state no clear next action"
+    }
+  ],
+  "inconclusive": [],
+  "not_applicable": [
+    {
+      "check_id": "EN-HEAVY-PAGES",
+      "reason": "No landing-candidate page exceeds 2.5 MB."
+    },
+    {
+      "check_id": "EN-SLOW-RESPONSE",
+      "reason": "Response times within tolerance."
+    },
+    {
+      "check_id": "EN-AUTOPLAY-MEDIA",
+      "reason": "No autoplaying media detected."
+    },
+    {
+      "check_id": "EN-INTERRUPTIONS",
+      "reason": "No site-wide arrival interruption pattern found."
+    },
+    {
+      "check_id": "EN-CONSENT-BLOCKS-CONTENT",
+      "reason": "No pages appear to be dominated by consent copy."
+    },
+    {
+      "check_id": "EN-NO-SITE-SEARCH",
+      "reason": "Site has fewer than 15 crawled pages; search is not yet material."
+    }
+  ],
+  "skill": "engagement-audit"
+}

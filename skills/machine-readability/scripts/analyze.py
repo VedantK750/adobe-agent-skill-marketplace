@@ -98,9 +98,19 @@ def run(workdir):
                  "%d rendered pages." % len(rendered_pages))
 
     # -- 2. Empty-shell proxy (works without a browser) ----------------------
+    # A genuine client-rendered shell returns almost nothing in the raw HTML:
+    # little body text, many scripts, AND few links, because the navigation is
+    # injected client-side too. That last condition is what separates a real
+    # SPA shell from a perfectly server-rendered index or listing page, which
+    # is legitimately text-light but link-rich. Page types where thin prose is
+    # expected (legal indexes, listings, contact) are excluded outright, so a
+    # short legal landing page is never mistaken for an empty application shell.
+    THIN_OK = ("legal", "listing", "category", "contact")
     shells = [p for p in pages
-              if A.word_count(p.get("body_text") or "") < 60
-              and p.get("scripts", 0) >= 5]
+              if p.get("page_type") not in THIN_OK
+              and A.word_count(p.get("body_text") or "") < 60
+              and p.get("scripts", 0) >= 5
+              and p.get("internal_links", 0) < 5]
     if shells:
         f.finding(
             "MR-EMPTY-SHELL",

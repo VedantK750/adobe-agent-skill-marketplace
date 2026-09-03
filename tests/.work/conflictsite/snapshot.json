@@ -1,0 +1,148 @@
+{
+  "audited_at": "2026-09-03T17:23:59Z",
+  "base_url": "http://127.0.0.1:8897/",
+  "blocked_by_robots": [],
+  "crawl": {
+    "delay_seconds": 0.4,
+    "low_value_cap": 4,
+    "max_pages": 20,
+    "pages_crawled": 2,
+    "pages_fetched": 2,
+    "pages_skipped_quota": 0,
+    "runtime_seconds": 0.9,
+    "type_cap": 8,
+    "user_agent": "brand-ai-readiness-audit/1.0 (read-only site audit; respects robots.txt)"
+  },
+  "pages": [
+    {
+      "body_text": "Gadget Store Gadget Store is an online shop that sells precision widgets to makers. Add to cart to buy now. See the widget",
+      "bytes": 886,
+      "canonical": "http://127.0.0.1:8897/",
+      "content_type": "text/html",
+      "elapsed_ms": 2,
+      "error": null,
+      "final_url": "http://127.0.0.1:8897/",
+      "forms": 0,
+      "h1": [
+        "Gadget Store"
+      ],
+      "has_breadcrumb": false,
+      "has_main": true,
+      "has_microdata": false,
+      "has_nav": true,
+      "headers": {
+        "content-type": "text/html",
+        "last-modified": "Thu, 03 Sep 2026 17:22:55 GMT",
+        "server": "SimpleHTTP/0.6 Python/3.14.4"
+      },
+      "headings": [
+        {
+          "id": null,
+          "level": 1,
+          "text": "Gadget Store"
+        }
+      ],
+      "iframes": [],
+      "images": [],
+      "internal_links": 2,
+      "jsonld_raw": [
+        "{\"@context\":\"https://schema.org\",\"@type\":\"Organization\",\"@id\":\"http://127.0.0.1:8897/#org\",\"name\":\"Gadget Store\",\"url\":\"http://127.0.0.1:8897/\",\"sameAs\":[\"https://linkedin.com/company/gadget\",\"https://www.crunchbase.com/organization/gadget\"]}"
+      ],
+      "meta_description": "Gadget Store sells widgets.",
+      "meta_robots": null,
+      "og_title": null,
+      "outbound_links": [],
+      "page_type": "home",
+      "raw_html": "<!DOCTYPE html><html lang=\"en\"><head>\n<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Gadget Store</title><meta name=\"description\" content=\"Gadget Store sells widgets.\">\n<link rel=\"canonical\" href=\"http://127.0.0.1:8897/\">\n<script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"Organization\",\"@id\":\"http://127.0.0.1:8897/#org\",\"name\":\"Gadget Store\",\"url\":\"http://127.0.0.1:8897/\",\"sameAs\":[\"https://linkedin.com/company/gadget\",\"https://www.crunchbase.com/organization/gadget\"]}</script>\n</head><body>\n<nav><a href=\"/\">Home</a> <a href=\"/p/widget.html\">Widget</a></nav>\n<main><h1>Gadget Store</h1>\n<p>Gadget Store is an online shop that sells precision widgets to makers. Add to cart to buy now.</p>\n<a href=\"/p/widget.html\">See the widget</a></main>\n<footer><p>&copy; 2026 Gadget Store</p></footer></body></html>\n",
+      "redirect_chain": [],
+      "scripts": 1,
+      "status": 200,
+      "stylesheets": 0,
+      "text": "Gadget Store Home Widget Gadget Store Gadget Store is an online shop that sells precision widgets to makers. Add to cart to buy now. See the widget \u00a9 2026 Gadget Store",
+      "title": "Gadget Store",
+      "url": "http://127.0.0.1:8897/",
+      "viewport": "width=device-width, initial-scale=1"
+    },
+    {
+      "body_text": "Precision Widget The Precision Widget from Gadget Store is machined to five microns. In stock now. Add to cart to buy now. Price: $129.00 Order the Precision Widget today and it ships within two working days.",
+      "bytes": 946,
+      "canonical": "http://127.0.0.1:8897/p/widget.html",
+      "content_type": "text/html",
+      "elapsed_ms": 2,
+      "error": null,
+      "final_url": "http://127.0.0.1:8897/p/widget.html",
+      "forms": 0,
+      "h1": [
+        "Precision Widget"
+      ],
+      "has_breadcrumb": false,
+      "has_main": true,
+      "has_microdata": false,
+      "has_nav": true,
+      "headers": {
+        "content-type": "text/html",
+        "last-modified": "Thu, 03 Sep 2026 17:22:55 GMT",
+        "server": "SimpleHTTP/0.6 Python/3.14.4"
+      },
+      "headings": [
+        {
+          "id": null,
+          "level": 1,
+          "text": "Precision Widget"
+        }
+      ],
+      "iframes": [],
+      "images": [],
+      "internal_links": 2,
+      "jsonld_raw": [
+        "{\"@context\":\"https://schema.org\",\"@type\":\"Product\",\"name\":\"Precision Widget\",\"description\":\"A precision widget.\",\"offers\":{\"@type\":\"Offer\",\"price\":\"49.00\",\"priceCurrency\":\"USD\"}}"
+      ],
+      "meta_description": "The Precision Widget, machined to five microns.",
+      "meta_robots": null,
+      "og_title": null,
+      "outbound_links": [],
+      "page_type": "product",
+      "raw_html": "<!DOCTYPE html><html lang=\"en\"><head>\n<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Precision Widget - Gadget Store</title>\n<meta name=\"description\" content=\"The Precision Widget, machined to five microns.\">\n<link rel=\"canonical\" href=\"http://127.0.0.1:8897/p/widget.html\">\n<script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"Product\",\"name\":\"Precision Widget\",\"description\":\"A precision widget.\",\"offers\":{\"@type\":\"Offer\",\"price\":\"49.00\",\"priceCurrency\":\"USD\"}}</script>\n</head><body>\n<nav><a href=\"/\">Home</a> <a href=\"/p/widget.html\">Widget</a></nav>\n<main><h1>Precision Widget</h1>\n<p>The Precision Widget from Gadget Store is machined to five microns. In stock now. Add to cart to buy now.</p>\n<p>Price: $129.00</p>\n<p>Order the Precision Widget today and it ships within two working days.</p></main>\n<footer><p>&copy; 2026 Gadget Store</p></footer></body></html>\n",
+      "redirect_chain": [],
+      "scripts": 1,
+      "status": 200,
+      "stylesheets": 0,
+      "text": "Precision Widget - Gadget Store Home Widget Precision Widget The Precision Widget from Gadget Store is machined to five microns. In stock now. Add to cart to buy now. Price: $129.00 Order the Precision Widget today and it ships within two working days. \u00a9 2026 Gadget Store",
+      "title": "Precision Widget - Gadget Store",
+      "url": "http://127.0.0.1:8897/p/widget.html",
+      "viewport": "width=device-width, initial-scale=1"
+    }
+  ],
+  "render_mode": "static-only",
+  "robots": {
+    "ai_agents_blocked": [],
+    "blanket_disallow": false,
+    "body": "User-agent: *\nAllow: /\n\nSitemap: http://127.0.0.1:8897/sitemap.xml\n",
+    "parse_error": null,
+    "present": true,
+    "sitemaps": [
+      "http://127.0.0.1:8897/sitemap.xml"
+    ],
+    "status": 200,
+    "url": "http://127.0.0.1:8897/robots.txt"
+  },
+  "robots_respected": true,
+  "site": "127.0.0.1:8897",
+  "site_type": "ecommerce",
+  "sitemap": {
+    "checked": [
+      "http://127.0.0.1:8897/sitemap.xml"
+    ],
+    "errors": [],
+    "found": true,
+    "lastmod": {
+      "http://127.0.0.1:8897/": "2026-01-01",
+      "http://127.0.0.1:8897/p/widget.html": "2026-02-01"
+    },
+    "url_count": 2
+  },
+  "sitemap_urls": [
+    "http://127.0.0.1:8897/",
+    "http://127.0.0.1:8897/p/widget.html"
+  ]
+}

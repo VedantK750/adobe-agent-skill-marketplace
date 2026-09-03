@@ -19,6 +19,13 @@ import sys
 SEVERITIES = ["critical", "high", "medium", "low"]
 SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
 
+# Below this many sampled items a whole-site proportion is not evidence, it is
+# noise: "most pages lack X" off a sample of two says nothing about the site.
+# Checks phrased as a site-wide proportion require at least this denominator to
+# fire; under it they record `inconclusive`. Per-type checks with their own
+# gating (e.g. product coverage) set their own floors.
+MIN_SAMPLE = 4
+
 BOILERPLATE_TAGS = ["script", "style", "noscript", "template", "svg", "iframe"]
 CHROME_TAGS = ["nav", "header", "footer", "aside", "form"]
 

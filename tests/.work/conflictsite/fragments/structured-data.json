@@ -1,0 +1,69 @@
+{
+  "findings": [
+    {
+      "affected_urls": [
+        "http://127.0.0.1:8897/p/widget.html"
+      ],
+      "category": "discoverability",
+      "check_id": "SD-TEXT-CONFLICT",
+      "confidence": "medium",
+      "evidence": "1/1 product pages affected (100.0%). Example: markup says 49.00, page shows 129.00.",
+      "impact": "degrading",
+      "mechanism": "When markup and rendered text state different values, the discrepancy undermines trust in the markup generally, and an assistant may repeat a price the visitor never sees \u2014 which is worse than stating nothing.",
+      "page_importance": "normal",
+      "prevalence": {
+        "affected": 1,
+        "sampled": 2
+      },
+      "skill": "structured-data",
+      "suggested_action": {
+        "effort": "medium",
+        "expected_impact": "Quoted attributes match what visitors see.",
+        "steps": [
+          "Render the JSON-LD from the same data object that renders the page.",
+          "Include currency and validity dates on every offer.",
+          "Add a build check comparing markup price to rendered price."
+        ],
+        "summary": "Generate markup and visible text from one source of truth so they cannot diverge.",
+        "verification": "SD-TEXT-CONFLICT clears."
+      },
+      "title": "Structured data price disagrees with the visible page"
+    }
+  ],
+  "inconclusive": [],
+  "not_applicable": [
+    {
+      "check_id": "SD-INVALID-JSON",
+      "reason": "All JSON-LD blocks parse cleanly."
+    },
+    {
+      "check_id": "SD-COVERAGE-PRODUCT",
+      "reason": "All 1 product pages carry the expected type."
+    },
+    {
+      "check_id": "SD-COVERAGE-ARTICLE",
+      "reason": "No article pages detected on this site."
+    },
+    {
+      "check_id": "SD-COVERAGE-DOCUMENTATION",
+      "reason": "No documentation pages detected on this site."
+    },
+    {
+      "check_id": "SD-COVERAGE-CONTACT",
+      "reason": "No contact pages detected on this site."
+    },
+    {
+      "check_id": "SD-COVERAGE-HOME",
+      "reason": "All 1 home pages carry the expected type."
+    },
+    {
+      "check_id": "SD-INCOMPLETE-PROPS",
+      "reason": "Declared nodes carry their required properties."
+    },
+    {
+      "check_id": "SD-NO-SAMEAS",
+      "reason": "Organization node declares sameAs links."
+    }
+  ],
+  "skill": "structured-data"
+}
