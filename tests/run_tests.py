@@ -261,6 +261,15 @@ def run():
                and len(rep["not_applicable"]) > 0,
                "%s: not_applicable records present (checks that ran silently)"
                % name)
+        # Prevalence must be a coherent ratio: affected <= sampled, always.
+        # A finding reporting affected > sampled (mixing a heading count against
+        # a page count, say) is nonsensical evidence a reader would distrust.
+        bad_prev = [f["check_id"] for f in rep["findings"]
+                    if (f.get("prevalence") or {}).get("affected", 0)
+                    > (f.get("prevalence") or {}).get("sampled", 0)]
+        expect(not bad_prev,
+               "%s: every finding has affected <= sampled (offenders: %s)"
+               % (name, bad_prev))
 
     # -- Determinism: audit badsite twice, reports match --------------------
     print("\ndeterminism:")

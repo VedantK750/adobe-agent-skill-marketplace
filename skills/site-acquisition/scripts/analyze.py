@@ -113,7 +113,41 @@ def run(workdir):
 
     # -- sitemap -------------------------------------------------------------
     sm = snap.get("sitemap", {})
-    if sm.get("url_count", 0) == 0:
+    url_count = sm.get("url_count", 0)
+    if url_count > 0:
+        f.na("ACC-NO-SITEMAP", "Sitemap found with %d URLs." % url_count)
+    elif sm.get("found"):
+        # A sitemap file WAS fetched but yielded no usable <url> entries within
+        # our budgets (a large sitemap index, a partition cutoff, or a slow
+        # tree). Claiming "no sitemap exists" here would be a false positive —
+        # the site (e.g. ProPublica's 680 KB index) plainly has one. Report the
+        # honest, weaker fact instead: the sitemap is present but was not fully
+        # enumerable in this pass. Lower impact and confidence match that.
+        f.finding(
+            "ACC-SITEMAP-NOT-ENUMERABLE",
+            "A sitemap exists but no page URLs could be read from it",
+            "discoverability",
+            "A sitemap that a consumer cannot parse into individual URLs gives "
+            "up much of its value: discovery falls back on internal linking, so "
+            "deep or newer pages may be missed even though the sitemap is "
+            "present.",
+            "Checked %s; a sitemap responded but 0 page URLs were extracted "
+            "within budget (large index, partitioned tree, or slow response)."
+            % (", ".join(sm.get("checked") or ["/sitemap.xml"]) or "/sitemap.xml"),
+            impact="weakening", affected=1, sampled=1, confidence="low",
+            action={
+                "summary": "Ensure the sitemap (and any child sitemaps) return "
+                           "well-formed <url><loc> entries with correct escaping.",
+                "effort": "low",
+                "steps": [
+                    "Confirm each <loc> is a valid, resolvable URL.",
+                    "Keep sitemap-index partitions reachable and reasonably sized.",
+                    "Validate the sitemap with a standard sitemap checker.",
+                ],
+                "expected_impact": "Consumers can enumerate every URL directly.",
+                "verification": "Re-run the audit; sitemap.url_count is non-zero.",
+            })
+    else:
         f.finding(
             "ACC-NO-SITEMAP",
             "No usable XML sitemap found",
@@ -138,9 +172,6 @@ def run(workdir):
                                    "link depth.",
                 "verification": "Re-run the audit; sitemap.url_count is non-zero.",
             })
-    else:
-        f.na("ACC-NO-SITEMAP",
-             "Sitemap found with %d URLs." % sm.get("url_count", 0))
 
     # -- status and redirects ------------------------------------------------
     errors = [p for p in pages if p.get("status") and p["status"] >= 400]

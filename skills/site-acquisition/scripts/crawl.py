@@ -11,6 +11,7 @@ Guarantees this script makes to the rest of the marketplace:
 """
 
 import argparse
+import html as _html
 import json
 import os
 import re
@@ -215,14 +216,22 @@ def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT):
             continue
         if "<sitemapindex" in body.lower():
             # Only take as many child partitions as remain in the file budget.
+            # <loc> values are XML-entity-encoded: a child sitemap URL with a
+            # query string appears as ...?a=1&amp;b=2. It must be unescaped
+            # before it is fetched, or the request carries a literal "&amp;",
+            # 404s, and the whole sitemap reads as empty — which fired a false
+            # ACC-NO-SITEMAP on sites (ProPublica) whose sitemap index is
+            # perfectly valid. `html.unescape` turns &amp; back into &.
             room = max(0, SITEMAP_FILE_LIMIT - len(seen_maps))
-            queue.extend(re.findall(r"(?is)<loc>\s*(.*?)\s*</loc>", body)[:room])
+            children = [_html.unescape(x.strip())
+                        for x in re.findall(r"(?is)<loc>\s*(.*?)\s*</loc>", body)]
+            queue.extend(children[:room])
             continue
         for block in re.findall(r"(?is)<url>(.*?)</url>", body):
             loc = re.search(r"(?is)<loc>\s*(.*?)\s*</loc>", block)
             if not loc:
                 continue
-            u = loc.group(1).strip()
+            u = _html.unescape(loc.group(1).strip())
             lastmod = re.search(r"(?is)<lastmod>\s*(.*?)\s*</lastmod>", block)
             urls.append(u)
             entries[u] = lastmod.group(1).strip() if lastmod else None

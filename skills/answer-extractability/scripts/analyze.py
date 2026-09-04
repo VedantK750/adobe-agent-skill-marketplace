@@ -215,7 +215,13 @@ def run(workdir):
             "%d question-shaped headings across %d pages are followed by "
             "preamble rather than a direct answer. Example: \"%s\"."
             % (len(unanswered), len(q_pages), unanswered[0][1][:80]),
-            impact="degrading", affected=len(unanswered), sampled=len(q_pages),
+            # Prevalence is page-level: how many of the pages that have question
+            # headings have at least one unanswered one. Using the heading count
+            # as `affected` against a page count as `sampled` produced ratios
+            # like 27/12 (affected > sampled), which is nonsensical evidence.
+            impact="degrading",
+            affected=len({p["final_url"] for p, _ in unanswered}),
+            sampled=len(q_pages),
             confidence="medium",
             affected_urls=sorted({p["final_url"] for p, _ in unanswered}),
             action={
