@@ -85,6 +85,13 @@ def run_site_audit(url: str, max_pages: int = 20, workdir: Optional[str] = None)
     with open(report_file, "r", encoding="utf-8") as fh:
         report = json.load(fh)
 
+    # Auto-generate the full elite remediation package
+    try:
+        rem_paths = build_remediation_package(workdir)
+        rem_names = sorted(list(rem_paths.keys()))
+    except Exception as exc:
+        rem_names = [f"Remediation error: {exc}"]
+
     # Return key executive summary and findings
     condensed = {
         "status": "success",
@@ -96,6 +103,7 @@ def run_site_audit(url: str, max_pages: int = 20, workdir: Optional[str] = None)
         "findings": report.get("findings"),
         "not_applicable_count": len(report.get("not_applicable", [])),
         "inconclusive": report.get("inconclusive", []),
+        "remediation_artifacts": rem_names,
     }
     return json.dumps(condensed, indent=2)
 
@@ -177,6 +185,28 @@ def submit_search_corroboration(workdir: str, found_urls: List[str]) -> str:
     return f"Corroboration evaluated: PASSED! EC-SINGLE-SOURCE-CLAIMS cleared."
 
 
+from lib.remediation import build_remediation_package
+
+
+def generate_remediation_suite(workdir: str) -> str:
+    """Generate the full elite remediation package (RAG rewrites, Knowledge Graph hero tag, merchant schema, citation anchors, and constraint matrix).
+
+    Args:
+        workdir: The working directory of an existing audit run.
+
+    Returns:
+        A formatted status string listing all generated remediation files in workdir/remediation/.
+    """
+    try:
+        paths = build_remediation_package(workdir)
+        lines = [f"Successfully generated {len(paths)} elite remediation artifacts in {workdir}/remediation/:"]
+        for name in sorted(paths):
+            lines.append(f"  • {name}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error generating remediation suite: {str(e)}"
+
+
 def save_remediation_file(workdir: str, filename: str, content: str) -> str:
     """Save an actionable fix or code artifact (such as llms.txt or schema.jsonld) to the audit's remediation directory.
 
@@ -209,11 +239,14 @@ Your Mission:
 2. Analyze the structured findings:
    - Identify why the brand is invisible or unquotable in AI assistants (discoverability).
    - Identify why human visitors referred by AI bounce upon arrival (engagement).
-3. If off-site corroboration is inconclusive, inspect `get_corroboration_targets` and use your knowledge or provided search URLs with `submit_search_corroboration`.
-4. Be deeply practical: don't just point out defects. Use `save_remediation_file` to write copy-pasteable fixes:
-   - Generate a valid `/llms.txt` for the brand.
-   - Generate a Schema.org `Organization` or `Product` JSON-LD patch.
-   - Generate an optimized `robots.txt` configuration.
+3. If off-site corroboration is inconclusive, inspect `get_corroboration_worklist` and use your knowledge or provided search URLs with `submit_search_corroboration`.
+4. Be deeply practical: provide production-grade, mechanism-sound code and copy remediations using `generate_remediation_suite` and `save_remediation_file`:
+   - Natural noun-anchored passage rewrites eliminating dangling pronouns (`1_rag_passage_rewrites.md`).
+   - The 1-sentence Knowledge Graph hero tag for `AE-NO-DEFINITION` (`2_brand_definition_anchor.html`).
+   - Dynamic Merchant Transparency JSON-LD schema with return policy, shipping, and price validity (`3_merchant_transparency.jsonld`).
+   - Deep-link heading citation script (`4_citation_anchor_patch.js`).
+   - Multi-constraint decision table for Appendix E personalization (`5_persona_constraint_matrix.html`).
+   - Standard `/llms.txt` and optimized `robots.txt`.
 5. Communicate with executive clarity: highlight total findings, severity distribution (Critical, High, Medium, Low), causal mechanisms, and prioritized next steps.
 """
 
@@ -239,6 +272,7 @@ def main():
         inspect_skill_guide,
         get_corroboration_worklist,
         submit_search_corroboration,
+        generate_remediation_suite,
         save_remediation_file,
     ]
 

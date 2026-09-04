@@ -7,3 +7,5 @@ audit-*
 test-*/
 .DS_Store
 .env
+.work/
+tests/.work/
