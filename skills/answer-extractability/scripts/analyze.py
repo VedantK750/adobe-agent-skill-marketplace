@@ -50,19 +50,61 @@ def chunk_paragraphs(text, target=90):
     return out
 
 
+# Host labels that are never the brand: common subdomains and TLD-ish parts.
+NON_BRAND_HOST = {
+    "www", "docs", "doc", "blog", "shop", "store", "app", "apps", "help",
+    "support", "developer", "developers", "api", "kb", "news", "en", "us",
+    "web", "portal", "account", "my", "go", "get", "learn", "community",
+    "com", "org", "net", "io", "co", "gov", "edu", "info", "biz",
+}
+
+
 def brand_tokens(snap):
-    """Best guess at the brand name, from host and home-page title."""
-    host = (snap.get("site") or "").split(".")[0]
-    toks = {host.lower()} if host else set()
+    """Best guess at the brand name, from host and a representative title.
+
+    Returns (tokens, source) where source is:
+      "host"  - a distinctive host label was found (e.g. `python` from
+                `docs.python.org`). This is a reliable anchor.
+      "title" - only title tokens were available; the host was uninformative
+                (a bare TLD label, or all-common words). Findings built on this
+                must be phrased as a hypothesis, not a fact, because the guess
+                can be wrong on an unseen site.
+      "none"  - nothing usable; the caller reports inconclusive.
+
+    The host label is chosen carefully: `docs.python.org` must yield `python`,
+    not `docs`, or entity-restatement fires a false positive on the entire
+    documentation of a site whose name it never actually looked for.
+    """
+    host = (snap.get("site") or "").lower()
+    labels = [l for l in host.split(".") if l]
+    brand_label = None
+    for l in labels:
+        if l not in NON_BRAND_HOST and not re.fullmatch(r"[a-z]{2}", l):
+            brand_label = l
+            break
+    toks = {brand_label} if brand_label else set()
+    source = "host" if brand_label else "none"
+
+    title = None
     for p in snap.get("pages", []):
         if p.get("page_type") == "home" and p.get("title"):
-            parts = re.split(r"[|\-–—:·]", p["title"])
-            if parts:
-                for t in re.findall(r"[A-Za-z]{3,}", parts[-1] + " " + parts[0]):
-                    if t.lower() not in STOPWORDS:
-                        toks.add(t.lower())
+            title = p["title"]
             break
-    return {t for t in toks if len(t) >= 3}
+    if title is None:
+        for p in snap.get("pages", []):
+            if p.get("title"):
+                title = p["title"]
+                break
+    if title:
+        parts = re.split(r"[|\-–—:·]", title)
+        # The brand is usually the shortest, most-repeated segment of a title;
+        # take tokens from the first and last segments, which is where it sits.
+        for t in re.findall(r"[A-Za-z]{3,}", (parts[-1] + " " + parts[0])):
+            if t.lower() not in STOPWORDS:
+                toks.add(t.lower())
+                if source == "none":
+                    source = "title"
+    return {t for t in toks if len(t) >= 3}, source
 
 
 def run(workdir):
@@ -242,7 +284,7 @@ def run(workdir):
         f.na("AE-NO-HEADING-ANCHORS", "Heading anchors present on most pages.")
 
     # -- 4. Entity restatement ----------------------------------------------
-    brand = brand_tokens(snap)
+    brand, brand_source = brand_tokens(snap)
     if brand:
         thin_mention = []
         for p in substantive:
@@ -253,6 +295,22 @@ def run(workdir):
             if hits < words / 250.0:
                 thin_mention.append(p)
         if len(thin_mention) > len(substantive) * 0.5:
+            # When the brand was only inferred from title text (no distinctive
+            # host label), the guess can be wrong on an unseen site. Phrase the
+            # evidence as an explicit assumption and lower confidence, so a
+            # mis-guessed brand reads as a hypothesis rather than a false claim
+            # that the site never names itself. The severity model then
+            # downgrades it further for the lower confidence.
+            assumed = ", ".join(sorted(brand))
+            if brand_source == "title":
+                detail = ("Assuming the brand is one of {%s} (inferred from the "
+                          "page title; host was uninformative), fewer than one "
+                          "such mention appears per 250 words." % assumed)
+                conf = "low"
+            else:
+                detail = ("Fewer than one mention of the brand (%s) per 250 "
+                          "words." % assumed)
+                conf = "medium"
             f.finding(
                 "AE-ENTITY-NOT-RESTATED",
                 "Body copy rarely names the brand or product it describes",
@@ -262,10 +320,9 @@ def run(workdir):
                 "the passage cannot be attributed to the brand and will not be "
                 "used to answer a question about it.",
                 A.ratio_evidence("substantive pages", len(thin_mention),
-                                 len(substantive),
-                                 "Fewer than one brand mention per 250 words."),
+                                 len(substantive), detail),
                 impact="weakening", affected=len(thin_mention),
-                sampled=len(substantive), confidence="medium",
+                sampled=len(substantive), confidence=conf,
                 affected_urls=[p["final_url"] for p in thin_mention],
                 action={
                     "summary": "Name the brand or product at the start of each "
@@ -386,7 +443,11 @@ def run(workdir):
 
     # -- 8. Missing meta descriptions ---------------------------------------
     no_desc = [p for p in pages if not p.get("meta_description")]
-    if len(no_desc) > len(pages) * 0.5:
+    if len(pages) < A.MIN_SAMPLE:
+        f.na("AE-NO-META-DESCRIPTION",
+             "Too few pages (%d) to assess description coverage as a proportion."
+             % len(pages))
+    elif len(no_desc) > len(pages) * 0.5:
         f.finding(
             "AE-NO-META-DESCRIPTION",
             "Most pages have no meta description",

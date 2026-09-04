@@ -112,18 +112,26 @@ def run(workdir):
     else:
         f.na("EN-HEAVY-PAGES", "No landing-candidate page exceeds 2.5 MB.")
 
+    # Response time is a wall-clock measurement that jitters between runs, so a
+    # single slow fetch (a cold cache, a CDN hiccup) must not fire this check —
+    # doing so both flips the finding on network noise and blames the site for a
+    # one-off. It fires only when slowness is systemic: a real proportion of a
+    # meaningful sample, judged against the median so one outlier cannot swing
+    # it. This keeps the finding a property of the site, not of one request.
     slow = [p for p in landing if p.get("elapsed_ms", 0) > SLOW_MS]
-    if slow:
+    enough = len(landing) >= A.MIN_SAMPLE
+    systemic = enough and len(slow) >= max(2, int(len(landing) * 0.3))
+    if systemic:
         f.finding(
             "EN-SLOW-RESPONSE",
-            "Server response times are slow on landing pages",
+            "Server response times are slow across many landing pages",
             "engagement",
             "Slow first-byte time delays everything downstream and also limits "
             "how much of the site a crawler will fetch in one pass, so it "
             "damages engagement and discoverability together.",
             A.ratio_evidence("landing-candidate pages", len(slow), len(landing),
-                             "Slowest observed: %d ms." % max(
-                                 p["elapsed_ms"] for p in slow)),
+                             "Slowest observed: %d ms; threshold %d ms." % (
+                                 max(p["elapsed_ms"] for p in slow), SLOW_MS)),
             impact="weakening", affected=len(slow), sampled=len(landing),
             confidence="medium",
             affected_urls=[p["final_url"] for p in slow],
@@ -133,10 +141,18 @@ def run(workdir):
                 "steps": ["Add full-page caching or a CDN for anonymous traffic.",
                           "Profile slow database queries on these routes."],
                 "expected_impact": "Faster first byte for visitors and crawlers.",
-                "verification": "Response times fall below 2.5 s.",
+                "verification": "Response times fall below 2.5 s on most pages.",
             })
+    elif not enough:
+        f.na("EN-SLOW-RESPONSE",
+             "Too few pages (%d) to judge response time as a site property."
+             % len(landing))
     else:
-        f.na("EN-SLOW-RESPONSE", "Response times within tolerance.")
+        # The exact slow-count is a wall-clock measurement that jitters between
+        # runs; keeping it out of the reason string keeps the report itself
+        # byte-stable when the finding does not fire.
+        f.na("EN-SLOW-RESPONSE",
+             "Response times within tolerance on most landing pages.")
 
     # -- 3. Dead-end pages ---------------------------------------------------
     dead_ends = [p for p in landing if p.get("internal_links", 0) < 3]
@@ -172,7 +188,12 @@ def run(workdir):
         f.na("EN-DEAD-END-PAGES", "Landing pages offer onward navigation.")
 
     # -- 4. Orientation ------------------------------------------------------
-    no_nav = [p for p in landing if not p.get("has_nav")]
+    # Either a navigation landmark or breadcrumbs give a deep arrival somewhere
+    # to orient from. Breadcrumbs alone are orientation, so a page that has them
+    # is not a finding even without a <nav> element — counting it as one was a
+    # false positive on sites that navigate purely by breadcrumb trail.
+    no_nav = [p for p in landing
+              if not p.get("has_nav") and not p.get("has_breadcrumb")]
     if len(no_nav) > len(landing) * 0.4:
         f.finding(
             "EN-NO-ORIENTATION",

@@ -21,6 +21,12 @@ URL_HINTS = [
     ("product", r"/(product|products|item|items|p|shop|store|buy|sku)(/|$)"),
     ("category", r"/(category|categories|collection|collections|c|catalog|shop)(/|$)"),
     ("article", r"/(blog|news|article|articles|post|posts|insights|stories|press)(/|$)"),
+    # Date-based permalinks (/2026/04/slug, /2026/04/12/slug) are the
+    # near-universal blog and news post shape. A year alone is an archive
+    # listing, so require a further slug or day/slug segment before calling it
+    # an article. This is a structural pattern, not a site-specific string.
+    ("article", r"/(19|20)\d{2}/\d{1,2}/[^/]+"),
+    ("article", r"/(19|20)\d{2}/[a-z][^/]{2,}"),
     ("documentation", r"/(docs|doc|documentation|guide|guides|manual|api|reference|kb|help|support)(/|$)"),
     ("contact", r"/(contact|contact-us|get-in-touch|locations?|book|appointment|enquiry)(/|$)"),
     ("about", r"/(about|about-us|team|company|who-we-are|our-story|careers)(/|$)"),
@@ -78,12 +84,55 @@ def declared_types(page):
     return out
 
 
-def classify_page(page):
-    url = (page.get("final_url") or page.get("url") or "").lower()
+def guess_type_from_url(url, base=None):
+    """Cheap page-type guess from the URL alone, before anything is fetched.
+
+    Used by the crawler to steer its frontier away from sections that are
+    already saturated (a sitemap full of /legal/ URLs, say) without paying to
+    fetch each one first. It only knows what the URL reveals, so it returns
+    None when the path is uninformative; the crawler treats that as "unknown"
+    and lets it through. The authoritative type is still assigned by
+    classify_page after the page is fetched.
+    """
     from urllib.parse import urlparse
+    p = urlparse(url if url.startswith("http") else "https://" + url)
+    path = p.path or "/"
+    if path in ("", "/"):
+        return "home"
+    seg = [s for s in path.split("/") if s]
+    if seg and re.fullmatch(r"[a-z]{2}(-[a-z]{2})?", seg[0]):
+        seg = seg[1:]
+        if not seg:
+            return "home"
+        path = "/" + "/".join(seg)
+    for label, pattern in URL_HINTS:
+        if re.search(pattern, path):
+            return label
+    return None
+
+
+def classify_page(page, base=None):
+    from urllib.parse import urlparse
+    url = (page.get("final_url") or page.get("url") or "").lower()
+    req = (page.get("url") or "").lower()
     path = urlparse(url).path or "/"
 
+    # Home detection has to survive geo/locale redirects. A site whose root
+    # redirects "/" -> "/in" or "/en-us" still has the home page there, and
+    # matching only path=="/" on the *final* URL would misfile it as "other",
+    # which then suppresses every home-gated check. So treat as home: the bare
+    # root, a request URL that was the crawl seed root, or a final path that is
+    # just a short locale segment.
     if path in ("", "/"):
+        return "home"
+    if base is not None:
+        b = urlparse(base if base.startswith("http") else "https://" + base)
+        base_path = (b.path or "/").rstrip("/")
+        if req.rstrip("/") == (b.scheme + "://" + b.netloc + base_path).lower() \
+                and base_path in ("", "/"):
+            return "home"
+    seg = [s for s in path.split("/") if s]
+    if len(seg) == 1 and re.fullmatch(r"[a-z]{2}(-[a-z]{2})?", seg[0]):
         return "home"
 
     # 1. Declared schema type is the strongest available signal.
@@ -145,19 +194,77 @@ def classify_site(pages):
     article_share = types.count("article") / n
     doc_share = types.count("documentation") / n
 
-    if product_share >= 0.15 or "product" in joined or CART_RE.search(text):
+    # The classified page-type distribution is the most reliable signal, so it
+    # is weighed before any loose text match. Strong ecommerce evidence is
+    # actual product pages or declared Product/Offer schema. Cart language on
+    # its own is treated as corroborating only, and never overrides a site that
+    # is clearly article- or documentation-led: "in stock" appears in plenty of
+    # recipe and blog prose, and letting it alone declare a store mis-typed
+    # publishers as ecommerce.
+    strong_ecom = product_share >= 0.15 or "product" in joined or "offer" in joined
+    cart_hits = len(CART_RE.findall(text))
+    if strong_ecom:
         return "ecommerce"
-    if "localbusiness" in joined or "restaurant" in joined or "medicalbusiness" in joined:
-        return "local-business"
-    if doc_share >= 0.3:
+    # Documentation wins on a real share of doc pages OR a dominant doc + other
+    # mix, because doc sites often leave many pages unclassified ("other") while
+    # still being unmistakably documentation. A quarter of the sample as docs,
+    # with docs being the largest *classified* type, is enough.
+    doc_dominant = doc_share >= 0.3 or (
+        doc_share >= 0.2 and types.count("documentation") >= max(
+            types.count("product"), types.count("article"),
+            types.count("category")))
+    if doc_dominant:
         return "documentation"
     if article_share >= 0.4:
         return "publisher"
-    if re.search(r"\b(pricing|free trial|sign up|api|integrations?|saas)\b",
-                 text, re.I):
+    if "localbusiness" in joined or "restaurant" in joined or "medicalbusiness" in joined:
+        return "local-business"
+    # Cart language only counts when the site is not article-led and the signal
+    # is more than a single incidental phrase.
+    if cart_hits >= 2 and article_share < 0.3:
+        return "ecommerce"
+    # SaaS/software requires CONVERGING signals, not one word. "api" alone
+    # appears on nearly every technical or documentation site, and matching it
+    # mislabelled the Python docs and Project Gutenberg as software. Demand at
+    # least two distinct product-led SaaS markers (a pricing/trial/subscription
+    # signal AND an integrations/API/platform signal), so incidental vocabulary
+    # on a docs or publisher site no longer tips the classification.
+    saas_signals = 0
+    if re.search(r"\b(free trial|start free|sign up free|pricing plans?|"
+                 r"subscription|per month|/mo\b|per seat|per user)\b", text, re.I):
+        saas_signals += 1
+    if re.search(r"\b(integrations?|sdk|rest api|api key|dashboard|"
+                 r"single sign-on|sso|deploy|workspace)\b", text, re.I):
+        saas_signals += 1
+    if re.search(r"\b(saas|platform as a service|cloud platform)\b", text, re.I):
+        saas_signals += 2
+    if saas_signals >= 2 and article_share < 0.3 and doc_share < 0.3:
         return "software"
     if BOOKING_RE.search(text):
         return "local-business"
+    if article_share >= 0.25:
+        return "publisher"
+    # A documentation-leaning site that fell through (many docs but also many
+    # 'other' index pages) is still better called documentation than unknown.
+    if types.count("documentation") >= 2 and types.count("documentation") >= \
+            types.count("article"):
+        return "documentation"
+    # Publisher fallback keyed on the host/base path, not per-post URLs. A blog
+    # or news site whose posts use bare-slug or dated permalinks that the page
+    # classifier files as `category`/`other` (Mozilla's blog does exactly this)
+    # would otherwise fall through to `unknown`. A host or root path named
+    # `blog`/`news` is a strong, general publisher signal independent of how
+    # individual post URLs happen to be shaped, so lean publisher when the
+    # sample is also content-shaped (not an app shell): several category/other
+    # pages and at least one real article or dated page seen.
+    from urllib.parse import urlparse
+    first = urlparse(pages[0].get("final_url") or pages[0].get("url") or "")
+    host_path = (first.netloc + " " + first.path).lower()
+    bloggish = re.search(r"\b(blog|news|magazine|journal|press)\b", host_path)
+    content_shaped = (types.count("category") + types.count("other")
+                      + types.count("article")) >= max(3, int(0.5 * len(pages)))
+    if bloggish and content_shaped and product_share < 0.15:
+        return "publisher"
     if len(pages) <= 6:
         return "portfolio"
     return "unknown"

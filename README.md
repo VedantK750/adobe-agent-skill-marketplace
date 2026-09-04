@@ -39,6 +39,29 @@ generalisation to unseen sites.
 stating *why* the defect breaks retrieval or engagement, not merely that
 something is missing. A fix that is not traceable to a mechanism is a guess.
 
+Underpinning all three is a **representative sample**. Conditional checks are
+only as good as the pages they see, so the crawler works to sample the whole
+site rather than one corner of it: sitemap URLs are interleaved across sections
+(a partition that is entirely `/legal/` cannot monopolise the budget), a
+per-type quota caps how many pages of each type are kept — tighter for
+low-value boilerplate — and a URL whose type is already saturated is skipped
+before it is fetched. Redirect targets are de-duplicated by final URL so one
+page reached under several aliases is never counted twice in a prevalence
+ratio. Home detection survives locale redirects (`/` → `/in`, `/en-us`). See
+`skills/site-acquisition/references/classification.md`.
+
+**Determinism is a property of the analysis, not a hope.** The audit is a pure
+function of the evidence snapshot: given the same `snapshot.json`, the report is
+byte-identical, every time — verified by running the full analysis ten times
+over a fixed snapshot and hashing the result (one distinct hash). Nothing in the
+analysis depends on wall-clock time, dict ordering or set iteration. The only
+thing that can move a report between two live runs is the network itself — a
+page that times out on one run, or genuinely responds slower — and the crawler
+is hardened against both: transient fetch errors are retried so one flaky
+request cannot collapse a crawl, and timing-derived checks (slow-response) fire
+only on systemic slowness, never on a single jittery fetch, and keep volatile
+measurements out of their reason strings.
+
 ---
 
 ## The eight skills
@@ -122,16 +145,32 @@ than an honest gap.
 ## Testing
 
 ```bash
+python3 tests/run_tests.py
+```
+
+The suite serves three synthetic sites over real HTTP and audits each end to
+end, asserting **both directions** of every check it exercises:
+
+- `tests/fixtures/badsite` deliberately breaks a range of checks (AI crawler
+  blocked, JS application shell, duplicate H1s, dangling chunks, image-locked
+  facts, stale copyright). Each must fire.
+- `tests/fixtures/goodsite` is a clean local business. The negative assertion
+  is the one that matters: it produces **zero findings**. A check that fires on
+  everything is worse than useless, so the clean site staying silent is the
+  strongest evidence the marketplace avoids false positives.
+- `tests/fixtures/conflictsite` states one price in JSON-LD and a different
+  one in visible text, exercising the `SD-TEXT-CONFLICT` check specifically.
+
+It also asserts the structural invariants the JSON schema cannot express
+(severity counts match the findings, action priority equals finding severity,
+ids are ordered) and that two audits of the same site produce byte-identical
+reports apart from the timestamp. To audit one fixture by hand instead:
+
+```bash
 python3 -m http.server 8899 --directory tests/fixtures/badsite &
 python3 skills/audit-orchestrator/scripts/run_audit.py \
   --url http://127.0.0.1:8899/ --workdir /tmp/bad --no-render
 ```
-
-`tests/fixtures/badsite` deliberately breaks a range of checks;
-`tests/fixtures/goodsite` is a clean counterpart. The negative assertion is
-the one that matters: the clean fixture produces **zero findings** and 42
-`not_applicable` records. Two runs over the same site produce byte-identical
-reports apart from the timestamp.
 
 ---
 

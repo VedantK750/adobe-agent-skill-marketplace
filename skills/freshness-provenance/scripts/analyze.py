@@ -21,9 +21,22 @@ SKILL = "freshness-provenance"
 
 YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
 COPYRIGHT_RE = re.compile(r"(?:©|&copy;|copyright)\s*(?:\d{4}\s*[-–]\s*)?(\d{4})", re.I)
+# A time-sensitive *claim*, not merely a word. Bare "hours", "version" or
+# "release" occur constantly in ordinary prose ("we talked for 4 hours", "try
+# your version") and matching them produced false positives on editorial
+# content. Each alternative below requires the operational context that makes
+# the value something a reader would need dated: a currency price, a per-period
+# price, a rate with a number, a stated pricing tier, opening hours, or a
+# numbered software version.
 TIME_SENSITIVE = re.compile(
-    r"\b(price|pricing|cost|fee|rate|plan|tier|hours|availability|in stock|"
-    r"schedule|deadline|version|release)\b", re.I)
+    r"([$£€₹¥]\s?\d"                              # a currency price
+    r"|\b\d+(\.\d+)?\s?(%|per cent)\s*(apr|apy|interest|rate)"  # a rate figure
+    r"|\bprices?\s+(start|from|at)\b"             # "prices from ..."
+    r"|\b(monthly|annual|per month|per year|/mo|/yr)\b.{0,20}[$£€₹¥]?\d"  # per-period price
+    r"|\b(pricing|price)\s+(plan|tier|table)\b"  # a pricing plan/tier/table
+    r"|\bopen(ing)?\s+hours?\b|\bhours?\s*:\s*\d"  # opening hours
+    r"|\bversion\s+\d|\bv\d+\.\d"                 # a numbered version
+    r")", re.I)
 AUTHOR_HINT = re.compile(r"\b(by|author|written by|reviewed by|posted by)\b", re.I)
 DATE_PROPS = ("datepublished", "datemodified", "dateposted")
 
@@ -102,12 +115,19 @@ def run(workdir):
              "No article or documentation pages detected on this site.")
 
     # -- 2. Undated time-sensitive claims -----------------------------------
+    # Product pages are deliberately out of scope: a product page stating its
+    # current price with no date is the norm on every store, so firing there
+    # produces a finding on 100% of a normal ecommerce site — noise, not signal.
+    # Price freshness on products is a structured-data concern (priceValidUntil
+    # on the Offer), handled there. This check targets prose pages — home,
+    # articles, documentation — where an undated price, plan or version claim in
+    # running text genuinely risks a superseded figure being repeated.
+    TS_SCOPE = ("home", "documentation", "article")
     risky = [p for p in pages
              if TIME_SENSITIVE.search(p.get("body_text") or "")
              and not jsonld_dates(p)
-             and p.get("page_type") in ("product", "home", "documentation", "article")]
-    scope = [p for p in pages
-             if p.get("page_type") in ("product", "home", "documentation", "article")]
+             and p.get("page_type") in TS_SCOPE]
+    scope = [p for p in pages if p.get("page_type") in TS_SCOPE]
     if risky and scope:
         f.finding(
             "FP-UNDATED-TIME-SENSITIVE",
@@ -138,18 +158,44 @@ def run(workdir):
              "No undated time-sensitive pages detected.")
 
     # -- 3. Stale copyright --------------------------------------------------
-    stale_years = []
+    # A copyright line is very often a range ("© 2001-2024"). What matters is
+    # the LATEST year the page names anywhere in a copyright context, not the
+    # first: "© 2001-2026" is current, and so is a page that says "© Copyright
+    # 2001 ..." in one place but "© 2001-2026 ..." in another. Two mistakes are
+    # avoided here:
+    #   * a page may carry SEVERAL copyright occurrences (a bare start-year in
+    #     one spot, the full current range in another). Scanning only the first
+    #     match — as .search() does — reads the bare 2001 and fires a false
+    #     'stale' finding on a site that is plainly current. So collect years
+    #     from EVERY copyright occurrence on the page and take the maximum.
+    #   * the year window is measured from each match so a range's end year is
+    #     always in view.
+    per_page_year = {}
     for p in pages:
-        m = COPYRIGHT_RE.search(p.get("text") or "")
-        if m:
-            try:
-                year = int(m.group(1))
-            except ValueError:
-                continue
-            if year < NOW.year - 1:
-                stale_years.append((p, year))
-    if stale_years:
-        oldest = min(y for _, y in stale_years)
+        text = p.get("text") or ""
+        years = []
+        for m in COPYRIGHT_RE.finditer(text):
+            span = text[m.start():m.start() + 40]
+            years += [int(y) for y in re.findall(r"\b(20\d{2}|19\d{2})\b", span)
+                      if 1990 <= int(y) <= NOW.year + 1]
+        if years:
+            per_page_year[p["final_url"]] = max(years)
+
+    # If ANY page on the site shows a current copyright year, the site is
+    # plainly maintained, and a bare old year elsewhere (very often a founding
+    # date — "© 2001 Python Software Foundation" — rather than a "last updated"
+    # marker) is not evidence that the site is stale. Firing on it would be a
+    # false positive on exactly the well-kept sites that carry a founding year
+    # in their footer. So the stale finding only stands when NO page shows a
+    # current year; otherwise it is at most an internal inconsistency, recorded
+    # as not_applicable with the reason.
+    site_newest = max(per_page_year.values()) if per_page_year else None
+    stale_years = [(p, per_page_year[p["final_url"]]) for p in pages
+                   if per_page_year.get(p["final_url"], NOW.year) < NOW.year - 1]
+    site_is_current = site_newest is not None and site_newest >= NOW.year - 1
+
+    if stale_years and not site_is_current:
+        newest = max(y for _, y in stale_years)
         f.finding(
             "FP-STALE-COPYRIGHT",
             "Footer copyright year is years out of date",
@@ -158,8 +204,8 @@ def run(workdir):
             "that the site is unmaintained, and it appears on every page. It "
             "invites a consumer to discount otherwise current content.",
             A.ratio_evidence("HTML pages", len(stale_years), len(pages),
-                             "Oldest year seen: %d (current year %d)."
-                             % (oldest, NOW.year)),
+                             "Most recent copyright year seen: %d (current year "
+                             "%d)." % (newest, NOW.year)),
             impact="weakening", affected=len(stale_years), sampled=len(pages),
             affected_urls=[p["final_url"] for p, _ in stale_years],
             action={
@@ -171,6 +217,12 @@ def run(workdir):
                 "expected_impact": "Removes a prominent staleness signal.",
                 "verification": "Copyright reflects the current year.",
             })
+    elif stale_years and site_is_current:
+        f.na("FP-STALE-COPYRIGHT",
+             "Some pages show an older copyright year (%d), but the site also "
+             "shows a current year (%d) elsewhere, so this reads as a founding "
+             "date or an inconsistency rather than a stale, unmaintained site."
+             % (min(y for _, y in stale_years), site_newest))
     else:
         f.na("FP-STALE-COPYRIGHT", "No stale copyright year detected.")
 
@@ -251,11 +303,35 @@ def run(workdir):
         f.na("FP-NO-AUTHOR", "No article pages detected on this site.")
 
     # -- 6. Stale year references in headings -------------------------------
+    # Only a year embedded in a substantive heading ("State of X in 2019") is a
+    # staleness signal. Two shapes must NOT fire, or archive-heavy blogs light
+    # up wholesale as a false positive:
+    #   * a heading whose text is essentially just a year — that is a "posts by
+    #     year" archive widget, a navigation control, not a dated claim; and
+    #   * any page that also carries a current-year heading, because a list
+    #     running 2005..2026 is plainly current, not stuck in 2005.
+    # So a page fires only if it has a stale-year heading that is real prose AND
+    # has no current-year heading anywhere on the page.
+    def heading_years(h):
+        return [int(y) for y in re.findall(r"\b(20\d{2})\b", h.get("text", ""))]
+
+    def is_bare_year_heading(h):
+        # Text is a year possibly wrapped in a word or two ("2019", "Archive
+        # 2019", "2019 posts") — not a sentence making a claim about a year.
+        txt = (h.get("text") or "").strip()
+        non_year = re.sub(r"\b20\d{2}\b", "", txt)
+        return A.word_count(non_year) <= 1
+
     old_year_pages = []
     for p in pages:
-        for h in p.get("headings") or []:
-            years = [int(y) for y in re.findall(r"\b(20\d{2})\b", h.get("text", ""))]
-            if years and max(years) < NOW.year - 1:
+        hs = p.get("headings") or []
+        current_here = any(NOW.year in heading_years(h) or
+                           (NOW.year - 1) in heading_years(h) for h in hs)
+        if current_here:
+            continue
+        for h in hs:
+            years = heading_years(h)
+            if years and max(years) < NOW.year - 1 and not is_bare_year_heading(h):
                 old_year_pages.append(p)
                 break
     if old_year_pages:

@@ -29,6 +29,20 @@ SOCIAL = re.compile(
     r"youtube\.com|github\.com|crunchbase\.com|wikidata\.org|wikipedia\.org|"
     r"g\.page|goo\.gl/maps|maps\.google|yelp\.com|trustpilot\.com)", re.I)
 
+# Very common English words that, used alone as a brand name, are near-certain
+# to collide with unrelated entities and generic search results. A short,
+# deliberately conservative list: a false membership here only downgrades a
+# heuristic finding that is already low-confidence, so precision matters more
+# than recall. Multi-word names ("Apple Records") are not judged by this.
+COMMON_WORD_NAMES = {
+    "apple", "amazon", "orange", "shell", "gap", "target", "square", "stripe",
+    "monday", "notion", "canva", "figure", "atlas", "prism", "nova", "delta",
+    "summit", "vertex", "apex", "pioneer", "frontier", "horizon", "beacon",
+    "anchor", "harbor", "harbour", "meridian", "cardinal", "compass", "element",
+    "fusion", "catalyst", "momentum", "spark", "pulse", "echo", "sage", "oak",
+    "maple", "cedar", "willow", "aspen", "phoenix", "titan", "atlas", "core",
+}
+
 PHONE = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
 POSTCODE_HINT = re.compile(
     r"\b(\d{5,6}|[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2})\b")
@@ -215,6 +229,74 @@ def run(workdir):
     else:
         f.unknown("EC-INCONSISTENT-SELF-DESCRIPTION",
                   "Home page was not retrieved.")
+
+    # -- 3b. Structural collision risk (no search required) -----------------
+    # Even with no off-site search, on-site evidence alone can show that a
+    # brand has done nothing to anchor its identity: no external profiles, no
+    # Organization/sameAs graph, and a name that is a common word certain to
+    # collide. That combination is a concrete, evidence-backed risk an
+    # assistant will conflate this entity with others — so the skill is not a
+    # silent no-op on a machine without search. The stronger, search-verified
+    # collision check (EC-NAME-COLLISION) still runs when search is available.
+    has_org = False
+    has_sameas = False
+    for p in pages:
+        for raw in p.get("jsonld_raw") or []:
+            low = (raw or "").lower()
+            if '"organization"' in low or '"localbusiness"' in low or \
+                    '"corporation"' in low:
+                has_org = True
+            if '"sameas"' in low:
+                has_sameas = True
+    name_for_collision = (claims.get("name") or "").split("|")[0]
+    name_word = re.sub(r"[^a-z]", "", name_for_collision.lower())
+    single_word = bool(name_word) and " " not in name_for_collision.strip()
+    common_word_name = single_word and name_word in COMMON_WORD_NAMES
+
+    weak_anchoring = (len(profiles) == 0) and (not has_sameas)
+    if weak_anchoring and (common_word_name or not has_org):
+        detail = []
+        if common_word_name:
+            detail.append("the brand name \"%s\" is a common word that collides "
+                          "with unrelated entities" % name_for_collision.strip())
+        if not has_org:
+            detail.append("no Organization/LocalBusiness node declares a "
+                          "machine-readable identity")
+        detail.append("no external profiles are linked and no sameAs graph exists")
+        f.finding(
+            "EC-WEAK-IDENTITY-ANCHORING",
+            "The brand gives a machine almost nothing to disambiguate it by",
+            "discoverability",
+            "A system decides which real-world entity a page is about from the "
+            "identity anchors it can see: an Organization node, a sameAs graph "
+            "linking authoritative profiles, and a name distinctive enough not "
+            "to collide. With none of these present, facts about this brand are "
+            "easily attributed to a different entity of the same name.",
+            "On-site identity anchors: %s." % "; ".join(detail),
+            impact="weakening", affected=1, sampled=1,
+            confidence="medium" if common_word_name else "low",
+            action={
+                "summary": "Anchor the brand's identity on-site: an Organization "
+                           "node, a complete sameAs graph, and a distinctive, "
+                           "consistently stated name.",
+                "effort": "low",
+                "steps": [
+                    "Add an Organization (or LocalBusiness) JSON-LD node with a "
+                    "stable @id, name, url, logo and description.",
+                    "List every official profile in a sameAs array and link them "
+                    "from the site itself.",
+                    "State a disambiguating category and location in prose so a "
+                    "common-word name is not mistaken for another entity.",
+                ],
+                "expected_impact": "Independent evidence can be tied back to this "
+                                   "brand instead of a namesake.",
+                "verification": "Organization + sameAs present; EC-WEAK-IDENTITY-"
+                                "ANCHORING clears.",
+            })
+    else:
+        f.na("EC-WEAK-IDENTITY-ANCHORING",
+             "Identity is anchored on-site (profiles/sameAs/Organization present "
+             "or the name is distinctive).")
 
     # -- 4. Off-site corroboration: requires search -------------------------
     targets = {

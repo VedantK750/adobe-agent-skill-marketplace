@@ -35,11 +35,12 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "title", "severity", "evidence", "suggested_action"],
+        "required": ["id", "check_id", "title", "severity", "category",
+                     "mechanism", "evidence", "suggested_action"],
         "additionalProperties": true,
         "properties": {
           "id": { "type": "string", "pattern": "^F-[0-9]{3,}$" },
-          "check_id": { "type": "string" },
+          "check_id": { "type": "string", "minLength": 1 },
           "title": { "type": "string", "minLength": 1 },
           "severity": {
             "type": "string",
@@ -53,7 +54,7 @@
             "type": "string",
             "enum": ["discoverability", "engagement"]
           },
-          "mechanism": { "type": "string" },
+          "mechanism": { "type": "string", "minLength": 1 },
           "evidence": { "type": "string", "minLength": 1 },
           "affected_urls": { "type": "array", "items": { "type": "string" } },
           "prevalence": {

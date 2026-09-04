@@ -49,11 +49,30 @@ def run(workdir):
 
     # -- 1. JS render gap ----------------------------------------------------
     if snap.get("render_mode") != "headless":
+        # Say *why* rendering did not happen. "No browser installed" and "the
+        # auditor chose --no-render" are different facts, and reporting the
+        # first when the second is true reads as the tool being unable to tell
+        # a missing capability from a disabled one. The static-HTML proxy
+        # (MR-EMPTY-SHELL) runs regardless and catches the worst offenders.
+        reason = {
+            "browser-absent":
+                "No headless browser is installed on this machine, so raw and "
+                "rendered text could not be compared. Install Playwright to "
+                "evaluate this check.",
+            "disabled-by-flag":
+                "Headless rendering was disabled for this run (--no-render), so "
+                "raw and rendered text were not compared. Re-run with rendering "
+                "enabled on a machine that has Playwright to evaluate this check.",
+            "launch-failed":
+                "A headless browser is installed but failed to launch on this "
+                "run, so raw and rendered text could not be compared.",
+        }.get(snap.get("render_status"),
+              "Rendered DOM was unavailable on this run, so raw and rendered "
+              "text could not be compared.")
         f.unknown(
             "MR-RENDER-GAP",
-            "No headless browser available on this run, so raw and rendered "
-            "text could not be compared. Install Playwright to evaluate this "
-            "check. A static-HTML proxy check was run instead (MR-EMPTY-SHELL).")
+            reason + " A static-HTML proxy check was run instead "
+                     "(MR-EMPTY-SHELL).")
     else:
         rendered_pages = [p for p in pages if p.get("rendered_text")]
         gapped = [(p, g) for p in rendered_pages
@@ -98,9 +117,19 @@ def run(workdir):
                  "%d rendered pages." % len(rendered_pages))
 
     # -- 2. Empty-shell proxy (works without a browser) ----------------------
+    # A genuine client-rendered shell returns almost nothing in the raw HTML:
+    # little body text, many scripts, AND few links, because the navigation is
+    # injected client-side too. That last condition is what separates a real
+    # SPA shell from a perfectly server-rendered index or listing page, which
+    # is legitimately text-light but link-rich. Page types where thin prose is
+    # expected (legal indexes, listings, contact) are excluded outright, so a
+    # short legal landing page is never mistaken for an empty application shell.
+    THIN_OK = ("legal", "listing", "category", "contact")
     shells = [p for p in pages
-              if A.word_count(p.get("body_text") or "") < 60
-              and p.get("scripts", 0) >= 5]
+              if p.get("page_type") not in THIN_OK
+              and A.word_count(p.get("body_text") or "") < 60
+              and p.get("scripts", 0) >= 5
+              and p.get("internal_links", 0) < 5]
     if shells:
         f.finding(
             "MR-EMPTY-SHELL",

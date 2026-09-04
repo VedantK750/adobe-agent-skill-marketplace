@@ -1,0 +1,7 @@
+# Build & run artifacts — never part of the submission
+__pycache__/
+*.pyc
+audit-runs/
+tests/.work/
+*.log
+.DS_Store

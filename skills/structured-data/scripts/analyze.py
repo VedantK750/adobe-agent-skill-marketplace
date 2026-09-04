@@ -18,9 +18,14 @@ import auditlib as A  # noqa: E402
 
 SKILL = "structured-data"
 
-# Page type -> (expected schema types, required properties for the main type)
+# Page type -> (expected schema types, required properties for the main type).
+# A product page on a SaaS/software site legitimately declares
+# SoftwareApplication or Service rather than Product, so those satisfy the
+# product-coverage check too; flagging "no Product markup" on a software
+# pricing page is a false positive this map is written to avoid.
 EXPECTED = {
-    "product": (["product"], ["name", "offers"]),
+    "product": (["product", "softwareapplication", "webapplication", "service"],
+                ["name"]),
     "article": (["article", "newsarticle", "blogposting"],
                 ["headline", "datepublished"]),
     "documentation": (["techarticle", "howto", "faqpage", "article"], ["name"]),
@@ -28,11 +33,62 @@ EXPECTED = {
     "home": (["organization", "website", "localbusiness"], ["name"]),
 }
 
-PRICE_RE = re.compile(r"(?:[$£€₹¥])\s?(\d[\d,]*(?:\.\d{2})?)")
+# Required properties depend on which type actually satisfied coverage. A
+# Product needs offers; a SoftwareApplication does not, so requiring offers of
+# everything on a product-typed page would mis-flag valid SaaS markup.
+REQUIRED_BY_TYPE = {
+    "product": ["name", "offers"],
+    "softwareapplication": ["name"],
+    "webapplication": ["name"],
+    "service": ["name"],
+    "article": ["headline", "datepublished"],
+    "newsarticle": ["headline", "datepublished"],
+    "blogposting": ["headline", "datepublished"],
+}
+
+# Visible prices, captured *with* their currency symbol so a conflict is only
+# ever declared within one currency. Comparing a markup price in USD against a
+# shipping surcharge printed in EUR would otherwise manufacture a phantom
+# conflict. The symbol is normalised to an ISO-ish code for comparison.
+PRICE_RE = re.compile(r"([$£€₹¥])\s?(\d[\d,]*(?:\.\d{1,2})?)")
+
+_SYMBOL_TO_CODE = {"$": "USD", "£": "GBP", "€": "EUR", "₹": "INR", "¥": "JPY"}
+
+
+def _norm_amount(raw):
+    """Normalise a price string to a canonical numeric string, or None.
+
+    "1,299.00" -> "1299", "19.99" -> "19.99", "19.90" -> "19.9", "19.00" ->
+    "19". Trailing-zero-only fractions collapse so "19.00" and "19" compare
+    equal, but "19.99" and "19.00" stay distinct — the integer-only comparison
+    this replaces treated those as equal and missed real conflicts.
+    """
+    if raw is None:
+        return None
+    s = str(raw).strip().replace(",", "")
+    m = re.search(r"\d+(?:\.\d+)?", s)
+    if not m:
+        return None
+    try:
+        val = float(m.group(0))
+    except ValueError:
+        return None
+    # Canonical form: drop an all-zero fractional part, else keep significant.
+    if val == int(val):
+        return str(int(val))
+    return ("%.2f" % val).rstrip("0").rstrip(".")
 
 
 def parse_nodes(page):
-    """Every JSON-LD node on the page, plus any parse errors."""
+    """Every JSON-LD node on the page, plus genuine parse errors.
+
+    A block that does not close cleanly (last non-space char is not } or ]) is
+    treated as *truncated by capture*, not invalid markup, and is skipped
+    rather than reported — capturing a snapshot must never manufacture an
+    SD-INVALID-JSON finding. Blocks that fail only on stray control characters
+    are retried once with those stripped, since a raw newline inside a string
+    is a common, harmless authoring slip that consumers tolerate.
+    """
     nodes, errors = [], []
     for raw in page.get("jsonld_raw", []) or []:
         text = (raw or "").strip()
@@ -41,8 +97,13 @@ def parse_nodes(page):
         try:
             data = json.loads(text)
         except Exception as exc:
-            errors.append(str(exc)[:120])
-            continue
+            if text[-1:] not in ("}", "]"):
+                continue  # truncated at capture, not a real error
+            try:
+                data = json.loads(re.sub(r"[\x00-\x1f]+", " ", text))
+            except Exception:
+                errors.append(str(exc)[:120])
+                continue
         stack = [data]
         while stack:
             node = stack.pop()
@@ -205,9 +266,15 @@ def run(workdir):
         ptype = p.get("page_type")
         if ptype not in EXPECTED:
             continue
-        expected_types, required = EXPECTED[ptype]
+        expected_types, default_required = EXPECTED[ptype]
         for node in parsed[p["final_url"]][0]:
-            if set(types_of(node)) & set(expected_types):
+            matched = set(types_of(node)) & set(expected_types)
+            if matched:
+                # Required properties follow the *actual* type that satisfied
+                # coverage, not the page type, so a SoftwareApplication is not
+                # judged against Product's `offers` requirement.
+                required = REQUIRED_BY_TYPE.get(
+                    sorted(matched)[0], default_required)
                 lowered = {k.lower() for k in node.keys()}
                 if any(r not in lowered for r in required):
                     incomplete.append((p, node))
@@ -295,12 +362,25 @@ def run(workdir):
             f.na("SD-NO-SAMEAS", "Organization node declares sameAs links.")
 
     # -- 6. Markup contradicting visible text --------------------------------
+    # A conflict is only declared when the markup states a price and the visible
+    # page shows a *different* price in the *same currency*. Two guards prevent
+    # false positives that the earlier integer-only comparison allowed:
+    #   * full decimal value is compared, so 19.99 != 19.00 is caught, while
+    #     19.00 == 19 is not treated as a discrepancy;
+    #   * prices are grouped by currency, so a USD offer is never compared
+    #     against a EUR figure elsewhere on the page.
     conflicts = []
     for p in pages:
         if p.get("page_type") != "product":
             continue
-        text_prices = set(PRICE_RE.findall(p.get("body_text") or ""))
-        if not text_prices:
+        # Map currency code -> set of canonical visible amounts.
+        visible = {}
+        for sym, amt in PRICE_RE.findall(p.get("body_text") or ""):
+            code = _SYMBOL_TO_CODE.get(sym)
+            norm = _norm_amount(amt)
+            if code and norm is not None:
+                visible.setdefault(code, set()).add(norm)
+        if not visible:
             continue
         for node in parsed[p["final_url"]][0]:
             offers = node.get("offers")
@@ -308,15 +388,32 @@ def run(workdir):
                 offers = [offers]
             if not isinstance(offers, list):
                 continue
+            hit = False
             for off in offers:
                 if not isinstance(off, dict):
                     continue
-                price = str(off.get("price", "")).replace(",", "")
-                if price and not any(
-                        price.split(".")[0] == t.replace(",", "").split(".")[0]
-                        for t in text_prices):
-                    conflicts.append((p, price, sorted(text_prices)[:3]))
+                mprice = _norm_amount(off.get("price"))
+                if mprice is None:
+                    continue
+                mcode = str(off.get("priceCurrency", "")).upper() or None
+                # Compare only within a currency we can see on the page. If the
+                # markup currency is unknown, fall back to any visible currency
+                # that has exactly one price (unambiguous), else skip rather
+                # than risk a phantom conflict.
+                if mcode and mcode in visible:
+                    candidates = visible[mcode]
+                elif not mcode and len(visible) == 1:
+                    candidates = next(iter(visible.values()))
+                else:
+                    continue
+                if mprice not in candidates:
+                    shown = sorted(candidates)[:3]
+                    label = ("%s %s" % (mcode or "", mprice)).strip()
+                    conflicts.append((p, label, shown))
+                    hit = True
                     break
+            if hit:
+                break
     if conflicts:
         f.finding(
             "SD-TEXT-CONFLICT",

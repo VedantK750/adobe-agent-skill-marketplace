@@ -25,6 +25,10 @@ clearly distinguishes them, so facts get attributed to the wrong organisation.
   not all present as plain text in a consistent format.
 - `EC-INCONSISTENT-SELF-DESCRIPTION` — the site names itself differently in
   `title` and `og:title`, supplying conflicting identity evidence.
+- `EC-WEAK-IDENTITY-ANCHORING` — no external profiles, no `sameAs` graph, and
+  either no `Organization` node or a common-word brand name: a machine has
+  almost nothing to disambiguate the entity by. Computed entirely on-site, so
+  it fires even when no search capability is available.
 - `EC-SINGLE-SOURCE-CLAIMS` — claims repeated on too few independent domains.
   **Requires search.**
 - `EC-NAME-COLLISION` — other entities sharing the name, with no
@@ -40,7 +44,9 @@ clearly distinguishes them, so facts get attributed to the wrong organisation.
    `{"urls": [...]}` to a file, set `AUDIT_SEARCH_RESULTS` to its path, and
    re-run the script.
 
-Without search, both off-site checks report `inconclusive` and say why.
+Without search, the two off-site checks report `inconclusive` and say why,
+but the on-site checks — including `EC-WEAK-IDENTITY-ANCHORING` — still run and
+fire, so the skill is never a silent no-op on a machine that lacks search.
 Never assert corroboration that was not actually verified — an unverified
 claim of corroboration is a worse failure than an honest gap.
 

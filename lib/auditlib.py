@@ -19,6 +19,13 @@ import sys
 SEVERITIES = ["critical", "high", "medium", "low"]
 SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
 
+# Below this many sampled items a whole-site proportion is not evidence, it is
+# noise: "most pages lack X" off a sample of two says nothing about the site.
+# Checks phrased as a site-wide proportion require at least this denominator to
+# fire; under it they record `inconclusive`. Per-type checks with their own
+# gating (e.g. product coverage) set their own floors.
+MIN_SAMPLE = 4
+
 BOILERPLATE_TAGS = ["script", "style", "noscript", "template", "svg", "iframe"]
 CHROME_TAGS = ["nav", "header", "footer", "aside", "form"]
 
@@ -63,10 +70,18 @@ def pages_of_type(snapshot, *types):
 
 
 def ok_pages(snapshot):
-    """Pages that were fetched successfully and carry HTML."""
+    """Pages that were fetched successfully and carry real HTML content.
+
+    Soft-404s (200 responses that are really error pages) are excluded: their
+    markup is not content to audit, and they frequently carry a correct
+    noindex, which would otherwise be mis-reported as a suppressed-snippet
+    defect. Every content check builds on this, so excluding them here fixes
+    the whole class of false positives at once.
+    """
     return [
         p for p in snapshot.get("pages", [])
         if p.get("status") == 200 and p.get("raw_html")
+        and not p.get("soft_404")
     ]
 
 
