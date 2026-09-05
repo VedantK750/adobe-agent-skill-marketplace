@@ -203,7 +203,6 @@ hallucination-free definition an AI overview needs to quote.
 
 
 def extract_store_profile(snapshot: dict) -> dict:
-    """Dynamically extract real price, currency, country, and transit time from snapshot without LLM."""
     """Dynamically extract real price, currency, country, dates, and transit time from snapshot without LLM."""
     import datetime
     import email.utils
@@ -235,10 +234,8 @@ def extract_store_profile(snapshot: dict) -> dict:
 
     price = None
     currency = None
-    valid_until = "2026-12-31"
     valid_until = None
 
-    # 1. Inspect existing JSON-LD for Price & Currency
     # 2. Inspect existing JSON-LD for Price, Currency, and Dates
     if prod_page:
         for j in prod_page.get("jsonld_raw", []):
@@ -701,6 +698,41 @@ This remediation roadmap provides production-ready code artifacts to resolve det
 """
 
 
+def build_llms_txt(snapshot: dict) -> str:
+    """Generate canonical /llms.txt manifest for AI crawlers."""
+    domain = snapshot.get("site", "brand.com")
+    home = next((p for p in snapshot.get("pages", []) if p.get("page_type") == "home"), {})
+    brand = clean_brand_name(home.get("og_title") or domain, domain)
+    desc = home.get("meta_description") or f"{brand} official website and machine-readable product catalog."
+
+    pages = snapshot.get("pages", [])
+    core_pages = []
+    seen = set()
+    for p in pages:
+        url = p.get("final_url", p.get("url"))
+        ptype = p.get("page_type", "other")
+        title = p.get("title") or ptype.title()
+        if url and url not in seen:
+            seen.add(url)
+            core_pages.append(f"- [{title}]({url}): Canonical {ptype.capitalize()} page")
+
+    out = [
+        f"# {brand}",
+        "",
+        f"> {desc}",
+        "",
+        "## Canonical Index",
+        "",
+    ]
+    out.extend(core_pages[:12])
+    out.append("")
+    out.append("## Machine-Readable Endpoints")
+    out.append(f"- [Product Catalog](https://{domain}/collections/all): Complete machine-indexable catalog")
+    out.append(f"- [Terms & Policies](https://{domain}/policies/terms-of-service): Buyer protection & fulfillment terms")
+    out.append("")
+    return "\n".join(out)
+
+
 def build_remediation_package(workdir: str) -> Dict[str, str]:
     """Execute the full remediation generator and write all artifacts to workdir/remediation/."""
     snapshot_path = os.path.join(workdir, "snapshot.json")
@@ -726,6 +758,7 @@ def build_remediation_package(workdir: str) -> Dict[str, str]:
         "3_merchant_transparency.jsonld": build_merchant_transparency_schema(snapshot),
         "4_citation_anchor_patch.js": build_citation_anchor_patch(),
         "5_persona_constraint_matrix.html": build_persona_constraint_matrix(snapshot),
+        "llms.txt": build_llms_txt(snapshot),
         "REMEDIATION_ACTION_PLAN.md": build_remediation_action_plan(snapshot, report),
     }
 

@@ -226,6 +226,42 @@ def save_remediation_file(workdir: str, filename: str, content: str) -> str:
     return f"Saved remediation artifact: {file_path}"
 
 
+def evaluate_marketplace_quality(workdir: str) -> str:
+    """Evaluate an audit's Marketplace Quality Index (MQI: 0-100), measuring precision, causal soundness, entropy, and remediation quality.
+
+    Args:
+        workdir: The working directory of an existing audit run (e.g. 'audit-thewholetruthfoods.com').
+
+    Returns:
+        A formatted scorecard breakdown with scores for all 6 pillars and the overall MQI score.
+    """
+    try:
+        from benchmark.mqi import compute_mqi, format_single_card
+        res = compute_mqi(workdir)
+        return format_single_card(res)
+    except Exception as e:
+        return f"Error computing MQI for {workdir}: {str(e)}"
+
+
+def compare_audit_quality(dir_a: str, dir_b: str) -> str:
+    """Compare two audit runs side-by-side in the Autonomous Marketplace Arena using the Marketplace Quality Index.
+
+    Args:
+        dir_a: The first audit working directory (e.g. 'audit-mokobara.com').
+        dir_b: The second audit working directory (e.g. 'audit-mokobara.com-v2').
+
+    Returns:
+        A comparative table showing score diffs and verdicts for each pillar.
+    """
+    try:
+        from benchmark.mqi import compute_mqi, format_comparison_card
+        res_a = compute_mqi(dir_a)
+        res_b = compute_mqi(dir_b)
+        return format_comparison_card(res_a, res_b)
+    except Exception as e:
+        return f"Error comparing audit quality: {str(e)}"
+
+
 # ---------------------------------------------------------------- Agent Initialization
 
 SYSTEM_INSTRUCTION = f"""You are the Lead Brand AI-Readiness & On-Site Engagement Auditor.
@@ -247,7 +283,8 @@ Your Mission:
    - Deep-link heading citation script (`4_citation_anchor_patch.js`).
    - Multi-constraint decision table for Appendix E personalization (`5_persona_constraint_matrix.html`).
    - Standard `/llms.txt` and optimized `robots.txt`.
-5. Communicate with executive clarity: highlight total findings, severity distribution (Critical, High, Medium, Low), causal mechanisms, and prioritized next steps.
+5. For internal quality assurance, use `evaluate_marketplace_quality` or `compare_audit_quality` to measure the Marketplace Quality Index (MQI: 0-100).
+6. Communicate with executive clarity: highlight total findings, severity distribution (Critical, High, Medium, Low), causal mechanisms, and prioritized next steps.
 """
 
 
@@ -274,6 +311,8 @@ def main():
         submit_search_corroboration,
         generate_remediation_suite,
         save_remediation_file,
+        evaluate_marketplace_quality,
+        compare_audit_quality,
     ]
 
     config = types.GenerateContentConfig(
