@@ -43,7 +43,7 @@ MANIFEST = load_manifest()
 
 # ---------------------------------------------------------------- Functions / Tools for Gemini
 
-def run_site_audit(url: str, max_pages: int = 20, workdir: Optional[str] = None) -> str:
+def run_site_audit(url: str, max_pages: int = 40, workdir: Optional[str] = None) -> str:
     """Run an AI-readiness and on-site engagement audit on a website URL.
 
     Args:

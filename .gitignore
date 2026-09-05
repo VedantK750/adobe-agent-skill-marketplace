@@ -5,3 +5,7 @@ audit-runs/
 tests/.work/
 *.log
 .DS_Store
+audit-*
+test-*
+.env
+*.zip
