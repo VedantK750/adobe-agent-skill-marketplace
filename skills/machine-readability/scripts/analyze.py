@@ -49,11 +49,30 @@ def run(workdir):
 
     # -- 1. JS render gap ----------------------------------------------------
     if snap.get("render_mode") != "headless":
+        # Say *why* rendering did not happen. "No browser installed" and "the
+        # auditor chose --no-render" are different facts, and reporting the
+        # first when the second is true reads as the tool being unable to tell
+        # a missing capability from a disabled one. The static-HTML proxy
+        # (MR-EMPTY-SHELL) runs regardless and catches the worst offenders.
+        reason = {
+            "browser-absent":
+                "No headless browser is installed on this machine, so raw and "
+                "rendered text could not be compared. Install Playwright to "
+                "evaluate this check.",
+            "disabled-by-flag":
+                "Headless rendering was disabled for this run (--no-render), so "
+                "raw and rendered text were not compared. Re-run with rendering "
+                "enabled on a machine that has Playwright to evaluate this check.",
+            "launch-failed":
+                "A headless browser is installed but failed to launch on this "
+                "run, so raw and rendered text could not be compared.",
+        }.get(snap.get("render_status"),
+              "Rendered DOM was unavailable on this run, so raw and rendered "
+              "text could not be compared.")
         f.unknown(
             "MR-RENDER-GAP",
-            "No headless browser available on this run, so raw and rendered "
-            "text could not be compared. Install Playwright to evaluate this "
-            "check. A static-HTML proxy check was run instead (MR-EMPTY-SHELL).")
+            reason + " A static-HTML proxy check was run instead "
+                     "(MR-EMPTY-SHELL).")
     else:
         rendered_pages = [p for p in pages if p.get("rendered_text")]
         gapped = [(p, g) for p in rendered_pages

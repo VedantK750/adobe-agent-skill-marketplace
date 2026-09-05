@@ -182,6 +182,17 @@ def classify_page(page, base=None):
 def classify_site(pages):
     if not pages:
         return "unknown"
+    # Only pages we could actually read inform the site type. If every page we
+    # hold is an error/blocked response (a site that 403s our crawler, as many
+    # large consumer sites do) or a soft-404, there is no evidence to classify
+    # from — the honest answer is `unknown`, never `portfolio`. The old
+    # `len(pages) <= 6 -> portfolio` fallback fired on a single 403 page and
+    # mislabelled a Fortune-500 site as a portfolio.
+    readable = [p for p in pages
+                if p.get("status") == 200 and p.get("raw_html")
+                and not p.get("soft_404")]
+    if not readable:
+        return "unknown"
     types = [p.get("page_type") for p in pages]
     all_types = []
     for p in pages:
@@ -194,18 +205,37 @@ def classify_site(pages):
     article_share = types.count("article") / n
     doc_share = types.count("documentation") / n
 
-    # The classified page-type distribution is the most reliable signal, so it
-    # is weighed before any loose text match. Strong ecommerce evidence is
-    # actual product pages or declared Product/Offer schema. Cart language on
-    # its own is treated as corroborating only, and never overrides a site that
-    # is clearly article- or documentation-led: "in stock" appears in plenty of
-    # recipe and blog prose, and letting it alone declare a store mis-typed
-    # publishers as ecommerce.
-    strong_ecom = product_share >= 0.15 or "product" in joined or "offer" in joined
+    # Strong ecommerce evidence is a real SHARE of product pages or Product/
+    # Offer schema on a meaningful fraction of pages — never a single Product
+    # node. A news site that carries one Product node (a book review, a
+    # "recommended" widget) is not a store: The Guardian declares a lone
+    # Product among ten NewsArticles, and the old `"product" in joined` test
+    # flipped it to ecommerce. Count how many pages actually declare Product/
+    # Offer and require prevalence, and let article/doc dominance win first.
+    pages_with_product = 0
+    for p in pages:
+        dts = declared_types(p)
+        if any(t in ("product", "offer") for t in dts):
+            pages_with_product += 1
+    product_schema_share = pages_with_product / n
+    strong_ecom = product_share >= 0.15 or product_schema_share >= 0.2
     cart_hits = len(CART_RE.findall(text))
-    if strong_ecom:
+    # Article- or documentation-dominant sites are classified as such even if a
+    # stray Product node is present, so a lone shop widget cannot override a
+    # clearly editorial or documentation site.
+    article_dominant = article_share >= 0.4
+    doc_dominant_early = doc_share >= 0.3
+    if strong_ecom and not article_dominant and not doc_dominant_early:
         return "ecommerce"
-    if doc_share >= 0.3:
+    # Documentation wins on a real share of doc pages OR a dominant doc + other
+    # mix, because doc sites often leave many pages unclassified ("other") while
+    # still being unmistakably documentation. A quarter of the sample as docs,
+    # with docs being the largest *classified* type, is enough.
+    doc_dominant = doc_share >= 0.3 or (
+        doc_share >= 0.2 and types.count("documentation") >= max(
+            types.count("product"), types.count("article"),
+            types.count("category")))
+    if doc_dominant:
         return "documentation"
     if article_share >= 0.4:
         return "publisher"
@@ -215,14 +245,64 @@ def classify_site(pages):
     # is more than a single incidental phrase.
     if cart_hits >= 2 and article_share < 0.3:
         return "ecommerce"
-    if re.search(r"\b(pricing|free trial|sign up|api|integrations?|saas)\b",
-                 text, re.I):
+    # SaaS/software requires CONVERGING signals, not one word. "api" alone
+    # appears on nearly every technical or documentation site, and matching it
+    # mislabelled the Python docs and Project Gutenberg as software. Demand at
+    # least two distinct product-led SaaS markers (a pricing/trial/subscription
+    # signal AND an integrations/API/platform signal), so incidental vocabulary
+    # on a docs or publisher site no longer tips the classification.
+    saas_signals = 0
+    if re.search(r"\b(free trial|start free|sign up free|pricing plans?|"
+                 r"subscription|per month|/mo\b|per seat|per user)\b", text, re.I):
+        saas_signals += 1
+    if re.search(r"\b(integrations?|sdk|rest api|api key|dashboard|"
+                 r"single sign-on|sso|deploy|workspace)\b", text, re.I):
+        saas_signals += 1
+    if re.search(r"\b(saas|platform as a service|cloud platform)\b", text, re.I):
+        saas_signals += 2
+    if saas_signals >= 2 and article_share < 0.3 and doc_share < 0.3:
         return "software"
     if BOOKING_RE.search(text):
         return "local-business"
     if article_share >= 0.25:
         return "publisher"
-    if len(pages) <= 6:
+    # A documentation-leaning site that fell through (many docs but also many
+    # 'other' index pages) is still better called documentation than unknown.
+    if types.count("documentation") >= 2 and types.count("documentation") >= \
+            types.count("article"):
+        return "documentation"
+    # Publisher fallback keyed on the host/base path, not per-post URLs. A blog
+    # or news site whose posts use bare-slug or dated permalinks that the page
+    # classifier files as `category`/`other` (Mozilla's blog does exactly this)
+    # would otherwise fall through to `unknown`. A host or root path named
+    # `blog`/`news` is a strong, general publisher signal independent of how
+    # individual post URLs happen to be shaped, so lean publisher when the
+    # sample is also content-shaped (not an app shell): several category/other
+    # pages and at least one real article or dated page seen.
+    from urllib.parse import urlparse
+    first = urlparse(pages[0].get("final_url") or pages[0].get("url") or "")
+    host_path = (first.netloc + " " + first.path).lower()
+    bloggish = re.search(r"\b(blog|news|magazine|journal|press)\b", host_path)
+    # News/editorial sites also reveal themselves by the shape of their content
+    # URLs across the crawl: /topics/, /series/, /story/, /article/, a dated
+    # permalink. ProPublica files posts under /topics and /series, which the
+    # page classifier calls `category`, leaving article_share low — so look for
+    # these editorial path segments among the readable pages too.
+    editorial_re = re.compile(
+        r"/(topics?|series|story|stories|article|articles|feature|features|"
+        r"investigations?|reports?|news)/", re.I)
+    editorial_urls = sum(
+        1 for p in readable
+        if editorial_re.search(urlparse(p.get("final_url") or "").path)
+        or re.search(r"/(19|20)\d{2}/", urlparse(p.get("final_url") or "").path))
+    editorial = editorial_urls >= max(3, int(0.3 * len(readable)))
+    content_shaped = (types.count("category") + types.count("other")
+                      + types.count("article")) >= max(3, int(0.5 * len(pages)))
+    if (bloggish or editorial) and content_shaped and product_share < 0.15:
+        return "publisher"
+    # Portfolio only when we actually read a small site, not when a large site
+    # merely blocked most of the crawl. Keyed on readable pages, not total.
+    if len(readable) <= 6:
         return "portfolio"
     return "unknown"
 

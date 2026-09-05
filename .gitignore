@@ -1,11 +1,7 @@
-venv/
+# Build & run artifacts — never part of the submission
 __pycache__/
-*.py[cod]
-*$py.class
-*.log
-audit-*
-test-*/
-.DS_Store
-.env
-.work/
+*.pyc
+audit-runs/
 tests/.work/
+*.log
+.DS_Store

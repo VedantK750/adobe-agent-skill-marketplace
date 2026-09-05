@@ -15,8 +15,16 @@ import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 SKILLS = os.path.join(ROOT, "skills")
+MANIFEST = os.path.join(ROOT, "marketplace.json")
 
-ANALYSERS = [
+# The order analysers run in. Acquisition must be first (it writes the snapshot
+# every other skill reads); the rest are ordered so that a skill which explains
+# *why* a later skill stayed silent runs first (readability before
+# extractability, so "no extractable text" is already on record). The
+# orchestrator does not invent this list — it intersects this order with the
+# skills the manifest actually declares, so the manifest stays the single
+# source of truth for what the marketplace contains.
+ANALYSIS_ORDER = [
     "site-acquisition",
     "machine-readability",
     "structured-data",
@@ -25,6 +33,40 @@ ANALYSERS = [
     "freshness-provenance",
     "engagement-audit",
 ]
+
+
+def load_manifest():
+    """Read marketplace.json and return (entrypoint_id, [non_entrypoint_ids]).
+
+    Composition is manifest-driven: the set of skills the orchestrator runs is
+    exactly the set the manifest declares (minus the entrypoint, which is the
+    orchestrator itself). Adding or removing a skill in marketplace.json changes
+    the pipeline with no code edit here — which is what makes the eight skills a
+    genuine marketplace rather than a hardcoded call graph.
+    """
+    with open(MANIFEST, "r", encoding="utf-8") as fh:
+        mani = json.load(fh)
+    entry = None
+    others = []
+    for s in mani.get("skills", []):
+        sid = s.get("id")
+        if s.get("entrypoint"):
+            entry = sid
+        else:
+            others.append(sid)
+    return entry, others
+
+
+def analyser_script(skill_id):
+    """Resolve a skill's analysis entry point by the marketplace convention.
+
+    Every analysis skill exposes scripts/analyze.py taking --workdir. Acquisition
+    is the one exception: its entry point is crawl.py (it also needs --url and
+    --max-pages), because it produces the snapshot rather than reading it.
+    """
+    if skill_id == "site-acquisition":
+        return os.path.join(SKILLS, skill_id, "scripts", "crawl.py")
+    return os.path.join(SKILLS, skill_id, "scripts", "analyze.py")
 
 
 def run(cmd, label):
@@ -107,7 +149,23 @@ def main():
     started = time.time()
     py = sys.executable
 
-    crawl = [py, os.path.join(SKILLS, "site-acquisition", "scripts", "crawl.py"),
+    # The manifest is the source of truth for which skills exist. We run exactly
+    # those, in the defined analysis order; a manifest skill with no known order
+    # is still run (appended), and an ordered skill absent from the manifest is
+    # skipped. This is what makes the pipeline follow the marketplace rather than
+    # a hardcoded list.
+    entry, manifest_skills = load_manifest()
+    declared = set(manifest_skills)
+    ordered = [s for s in ANALYSIS_ORDER if s in declared]
+    ordered += [s for s in manifest_skills if s not in ANALYSIS_ORDER]
+
+    if "site-acquisition" not in declared:
+        sys.stderr.write("[pipeline] manifest declares no site-acquisition skill; "
+                         "cannot produce a snapshot\n")
+        sys.exit(1)
+
+    # 1. Acquisition first: it produces the snapshot everything else reads.
+    crawl = [py, analyser_script("site-acquisition"),
              "--url", args.url, "--workdir", args.workdir,
              "--max-pages", str(args.max_pages)]
     if args.no_render:
@@ -115,7 +173,13 @@ def main():
     if not run(crawl, "site-acquisition:crawl"):
         sys.exit(1)
 
-    for skill in ANALYSERS:
+    # 2. Every declared analysis skill, each an independent unit reading the
+    #    shared snapshot. site-acquisition is included here too: crawl.py above
+    #    produced the snapshot, and its analyze.py is what turns the crawl
+    #    evidence (robots rules, redirects, canonicals) into findings. A skill
+    #    that fails is recorded by `run` and the pipeline continues, so one
+    #    broken analyser degrades the report rather than losing it.
+    for skill in ordered:
         run([py, os.path.join(SKILLS, skill, "scripts", "analyze.py"),
              "--workdir", args.workdir], skill)
 

@@ -11,6 +11,7 @@ Guarantees this script makes to the rest of the marketplace:
 """
 
 import argparse
+import html as _html
 import json
 import os
 import re
@@ -38,6 +39,8 @@ AI_AGENTS = ["GPTBot", "ClaudeBot", "Claude-Web", "PerplexityBot", "CCBot",
 DEFAULT_MAX_PAGES = 40
 DEFAULT_DELAY = 0.4
 DEFAULT_TIMEOUT = 12
+FETCH_RETRIES = 2       # extra attempts on a transient network error
+FETCH_BACKOFF = 0.6     # seconds, multiplied by attempt number
 WALL_CLOCK_BUDGET = 180  # seconds; crawling stops and we report what we have
 TYPE_QUOTA_SHARE = 0.4   # no single page type may exceed this share of the sample
 FETCH_BUDGET_FACTOR = 2.5  # cap total fetches at this multiple of max_pages
@@ -60,33 +63,47 @@ def session():
     return s
 
 
-def fetch(sess, url, timeout=DEFAULT_TIMEOUT):
-    """GET a URL. Returns a dict; never raises."""
+def fetch(sess, url, timeout=DEFAULT_TIMEOUT, retries=FETCH_RETRIES):
+    """GET a URL. Returns a dict; never raises.
+
+    A transient network error (timeout, dropped connection) is retried a few
+    times with a short backoff. This is not a determinism fix — the network is
+    inherently non-deterministic — but it stops one flaky request from
+    collapsing a whole crawl: a timeout on the seed page leaves nothing to
+    discover links from, so the audit would otherwise see a one-page site. HTTP
+    error codes (4xx/5xx) are real responses, not exceptions, and are never
+    retried; they are reported as-is.
+    """
     started = time.time()
-    try:
-        r = sess.get(url, timeout=timeout, allow_redirects=True)
-        chain = [h.url for h in r.history] + [r.url]
-        ctype = r.headers.get("Content-Type", "")
-        is_html = "html" in ctype.lower()
-        return {
-            "url": url,
-            "final_url": r.url,
-            "status": r.status_code,
-            "redirect_chain": chain if len(chain) > 1 else [],
-            "content_type": ctype,
-            "headers": {k.lower(): v for k, v in r.headers.items()},
-            "raw_html": r.text if is_html else "",
-            "bytes": len(r.content or b""),
-            "elapsed_ms": int((time.time() - started) * 1000),
-            "error": None,
-        }
-    except Exception as exc:
-        return {
-            "url": url, "final_url": url, "status": None, "redirect_chain": [],
-            "content_type": "", "headers": {}, "raw_html": "", "bytes": 0,
-            "elapsed_ms": int((time.time() - started) * 1000),
-            "error": "%s: %s" % (type(exc).__name__, exc),
-        }
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            r = sess.get(url, timeout=timeout, allow_redirects=True)
+            chain = [h.url for h in r.history] + [r.url]
+            ctype = r.headers.get("Content-Type", "")
+            is_html = "html" in ctype.lower()
+            return {
+                "url": url,
+                "final_url": r.url,
+                "status": r.status_code,
+                "redirect_chain": chain if len(chain) > 1 else [],
+                "content_type": ctype,
+                "headers": {k.lower(): v for k, v in r.headers.items()},
+                "raw_html": r.text if is_html else "",
+                "bytes": len(r.content or b""),
+                "elapsed_ms": int((time.time() - started) * 1000),
+                "error": None,
+            }
+        except Exception as exc:
+            last_exc = exc
+            if attempt < retries:
+                time.sleep(FETCH_BACKOFF * (attempt + 1))
+    return {
+        "url": url, "final_url": url, "status": None, "redirect_chain": [],
+        "content_type": "", "headers": {}, "raw_html": "", "bytes": 0,
+        "elapsed_ms": int((time.time() - started) * 1000),
+        "error": "%s: %s" % (type(last_exc).__name__, last_exc),
+    }
 
 
 # ---------------------------------------------------------------- robots
@@ -157,15 +174,22 @@ SITEMAP_FILE_LIMIT = 6
 SITEMAP_TIME_BUDGET = 30  # seconds
 
 
-def _get_text(sess, url):
-    """Fetch a text/XML resource in one request. Returns "" on any failure."""
-    try:
-        r = sess.get(url, timeout=DEFAULT_TIMEOUT, allow_redirects=True)
-        if r.status_code != 200:
-            return "", r.status_code
-        return r.text, 200
-    except Exception as exc:
-        return "", "%s" % type(exc).__name__
+def _get_text(sess, url, retries=FETCH_RETRIES):
+    """Fetch a text/XML resource (robots, sitemap). Returns ("", reason) on
+    failure. Transient errors are retried so a flaky robots/sitemap fetch does
+    not needlessly strip the crawl of its seed URLs."""
+    last = "error"
+    for attempt in range(retries + 1):
+        try:
+            r = sess.get(url, timeout=DEFAULT_TIMEOUT, allow_redirects=True)
+            if r.status_code != 200:
+                return "", r.status_code
+            return r.text, 200
+        except Exception as exc:
+            last = "%s" % type(exc).__name__
+            if attempt < retries:
+                time.sleep(FETCH_BACKOFF * (attempt + 1))
+    return "", last
 
 
 def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT):
@@ -192,14 +216,22 @@ def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT):
             continue
         if "<sitemapindex" in body.lower():
             # Only take as many child partitions as remain in the file budget.
+            # <loc> values are XML-entity-encoded: a child sitemap URL with a
+            # query string appears as ...?a=1&amp;b=2. It must be unescaped
+            # before it is fetched, or the request carries a literal "&amp;",
+            # 404s, and the whole sitemap reads as empty — which fired a false
+            # ACC-NO-SITEMAP on sites (ProPublica) whose sitemap index is
+            # perfectly valid. `html.unescape` turns &amp; back into &.
             room = max(0, SITEMAP_FILE_LIMIT - len(seen_maps))
-            queue.extend(re.findall(r"(?is)<loc>\s*(.*?)\s*</loc>", body)[:room])
+            children = [_html.unescape(x.strip())
+                        for x in re.findall(r"(?is)<loc>\s*(.*?)\s*</loc>", body)]
+            queue.extend(children[:room])
             continue
         for block in re.findall(r"(?is)<url>(.*?)</url>", body):
             loc = re.search(r"(?is)<loc>\s*(.*?)\s*</loc>", block)
             if not loc:
                 continue
-            u = loc.group(1).strip()
+            u = _html.unescape(loc.group(1).strip())
             lastmod = re.search(r"(?is)<lastmod>\s*(.*?)\s*</lastmod>", block)
             urls.append(u)
             entries[u] = lastmod.group(1).strip() if lastmod else None
@@ -297,13 +329,21 @@ def diversify(urls):
 def try_render(urls, timeout_ms=8000):
     """Render pages with Playwright if it is installed. Absence is fine.
 
-    Returning None means render-dependent checks report `inconclusive`
-    rather than guessing, which is the honest outcome.
+    Returns (render_map, status) where status is one of:
+      "rendered"       - a browser ran and produced DOM for at least some pages
+      "browser-absent" - Playwright is not installed on this machine
+      "launch-failed"  - Playwright is installed but the browser would not start
+
+    The distinction matters downstream: a render-dependent check must be able to
+    tell an evaluator *why* it could not compare raw against rendered HTML, and
+    "no browser installed" is a different, honest story from "the auditor chose
+    not to render". A None render_map means render-dependent checks report
+    `inconclusive` rather than guessing.
     """
     try:
         from playwright.sync_api import sync_playwright
     except Exception:
-        return None
+        return None, "browser-absent"
     out = {}
     try:
         with sync_playwright() as pw:
@@ -317,8 +357,8 @@ def try_render(urls, timeout_ms=8000):
                     continue
             browser.close()
     except Exception:
-        return None
-    return out
+        return None, "launch-failed"
+    return out, "rendered"
 
 
 # ---------------------------------------------------------------- page meta
@@ -361,6 +401,29 @@ def heading_anchor(h):
         parent = parent.parent
         depth += 1
     return None
+
+
+# A soft-404 is a page that returns HTTP 200 but is really an error page. Its
+# markup carries no content worth auditing, and crucially it often carries
+# noindex/nofollow (correctly) — so counting it as a content page produced a
+# false ACC-SNIPPET-SUPPRESSED finding on sites (MDN among them) whose 404
+# route answers 200. Detected from the URL shape and the page's own title/h1,
+# both site-neutral signals.
+_SOFT404_URL = re.compile(r"/(404|not[-_]?found|error)(/|\.|$)", re.I)
+_SOFT404_TITLE = re.compile(
+    r"\b(404|page not found|not found|page does(?:n['’]?t| not) exist|"
+    r"no longer exists)\b", re.I)
+
+
+def is_soft_404(page):
+    """True if a 200 response is really an error page."""
+    if _SOFT404_URL.search(up.urlparse(page.get("final_url") or "").path):
+        return True
+    title = (page.get("title") or "")
+    h1s = " ".join(page.get("h1") or [])
+    # Require the signal in the title or H1 (structural), not merely in body
+    # copy, so an article legitimately discussing "404 errors" is not caught.
+    return bool(_SOFT404_TITLE.search(title) or _SOFT404_TITLE.search(h1s))
 
 
 def page_meta(html, url):
@@ -540,7 +603,18 @@ def crawl(start_url, workdir, max_pages, delay, render):
             page["internal_links"] = len(set(discovered_internal))
             page["outbound_links"] = sorted(
                 {u for u in discovered if not same_site(u, base)})[:40]
+        page["soft_404"] = bool(res["raw_html"]) and is_soft_404(page)
         page["page_type"] = classify_page(page, base)
+
+        # A 200 response that is not HTML (a plain-text CHANGES file, a PDF, an
+        # XML feed) is neither a document to audit nor an error to report. Do
+        # not keep it as a "page": counting it inflated pages_crawled and made
+        # the header count disagree with the per-check sample (a site with six
+        # CHANGES text files read as nine pages while only three were HTML). It
+        # has already contributed any links it carried. Non-200s ARE kept —
+        # the accessibility checks need their status codes and redirect chains.
+        if res["status"] == 200 and not res["raw_html"]:
+            continue
 
         # Apply the quota. A page over its type cap is dropped from the sample
         # but still contributes its links, so discovery is not starved. The
@@ -562,7 +636,13 @@ def crawl(start_url, workdir, max_pages, delay, render):
             "[crawl] %d pages skipped by per-type quota (caps: default %d, "
             "low-value %d)\n" % (skipped_quota, default_cap, LOW_VALUE_CAP))
 
-    render_map = try_render([p["final_url"] for p in pages[:12]]) if render else None
+    if render:
+        render_map, render_status = try_render([p["final_url"] for p in pages[:12]])
+    else:
+        # The auditor opted out with --no-render. This is not the same as a
+        # machine that has no browser: say so explicitly so downstream checks
+        # do not claim a capability was missing when it was merely declined.
+        render_map, render_status = None, "disabled-by-flag"
     if render_map is not None:
         for p in pages:
             if p["final_url"] in render_map:
@@ -578,6 +658,7 @@ def crawl(start_url, workdir, max_pages, delay, render):
         "audited_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "site_type": site_type,
         "render_mode": "headless" if render_map is not None else "static-only",
+        "render_status": render_status,
         "robots": robots_info,
         "robots_respected": True,
         "blocked_by_robots": blocked,

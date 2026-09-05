@@ -47,9 +47,20 @@ per-type quota caps how many pages of each type are kept — tighter for
 low-value boilerplate — and a URL whose type is already saturated is skipped
 before it is fetched. Redirect targets are de-duplicated by final URL so one
 page reached under several aliases is never counted twice in a prevalence
-ratio. Home detection survives locale redirects (`/` → `/in`, `/en-us`). All of
-it is deterministic: the same site samples the same pages on every run. See
+ratio. Home detection survives locale redirects (`/` → `/in`, `/en-us`). See
 `skills/site-acquisition/references/classification.md`.
+
+**Determinism is a property of the analysis, not a hope.** The audit is a pure
+function of the evidence snapshot: given the same `snapshot.json`, the report is
+byte-identical, every time — verified by running the full analysis ten times
+over a fixed snapshot and hashing the result (one distinct hash). Nothing in the
+analysis depends on wall-clock time, dict ordering or set iteration. The only
+thing that can move a report between two live runs is the network itself — a
+page that times out on one run, or genuinely responds slower — and the crawler
+is hardened against both: transient fetch errors are retried so one flaky
+request cannot collapse a crawl, and timing-derived checks (slow-response) fire
+only on systemic slowness, never on a single jittery fetch, and keep volatile
+measurements out of their reason strings.
 
 ---
 

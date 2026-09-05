@@ -159,24 +159,42 @@ def run(workdir):
 
     # -- 3. Stale copyright --------------------------------------------------
     # A copyright line is very often a range ("© 2001-2024"). What matters is
-    # the LATEST year it names, not the first: "2001-2025" on a 2026 run is
-    # current, and reading the 2001 as the copyright year would be a false
-    # positive. So take the maximum plausible year within the copyright span,
-    # tolerant of whatever dash or entity separates a range.
-    stale_years = []
+    # the LATEST year the page names anywhere in a copyright context, not the
+    # first: "© 2001-2026" is current, and so is a page that says "© Copyright
+    # 2001 ..." in one place but "© 2001-2026 ..." in another. Two mistakes are
+    # avoided here:
+    #   * a page may carry SEVERAL copyright occurrences (a bare start-year in
+    #     one spot, the full current range in another). Scanning only the first
+    #     match — as .search() does — reads the bare 2001 and fires a false
+    #     'stale' finding on a site that is plainly current. So collect years
+    #     from EVERY copyright occurrence on the page and take the maximum.
+    #   * the year window is measured from each match so a range's end year is
+    #     always in view.
+    per_page_year = {}
     for p in pages:
-        m = COPYRIGHT_RE.search(p.get("text") or "")
-        if not m:
-            continue
-        span = (p.get("text") or "")[m.start():m.start() + 40]
-        years = [int(y) for y in re.findall(r"\b(20\d{2}|19\d{2})\b", span)
-                 if 1990 <= int(y) <= NOW.year + 1]
-        if not years:
-            continue
-        year = max(years)
-        if year < NOW.year - 1:
-            stale_years.append((p, year))
-    if stale_years:
+        text = p.get("text") or ""
+        years = []
+        for m in COPYRIGHT_RE.finditer(text):
+            span = text[m.start():m.start() + 40]
+            years += [int(y) for y in re.findall(r"\b(20\d{2}|19\d{2})\b", span)
+                      if 1990 <= int(y) <= NOW.year + 1]
+        if years:
+            per_page_year[p["final_url"]] = max(years)
+
+    # If ANY page on the site shows a current copyright year, the site is
+    # plainly maintained, and a bare old year elsewhere (very often a founding
+    # date — "© 2001 Python Software Foundation" — rather than a "last updated"
+    # marker) is not evidence that the site is stale. Firing on it would be a
+    # false positive on exactly the well-kept sites that carry a founding year
+    # in their footer. So the stale finding only stands when NO page shows a
+    # current year; otherwise it is at most an internal inconsistency, recorded
+    # as not_applicable with the reason.
+    site_newest = max(per_page_year.values()) if per_page_year else None
+    stale_years = [(p, per_page_year[p["final_url"]]) for p in pages
+                   if per_page_year.get(p["final_url"], NOW.year) < NOW.year - 1]
+    site_is_current = site_newest is not None and site_newest >= NOW.year - 1
+
+    if stale_years and not site_is_current:
         newest = max(y for _, y in stale_years)
         f.finding(
             "FP-STALE-COPYRIGHT",
@@ -199,6 +217,12 @@ def run(workdir):
                 "expected_impact": "Removes a prominent staleness signal.",
                 "verification": "Copyright reflects the current year.",
             })
+    elif stale_years and site_is_current:
+        f.na("FP-STALE-COPYRIGHT",
+             "Some pages show an older copyright year (%d), but the site also "
+             "shows a current year (%d) elsewhere, so this reads as a founding "
+             "date or an inconsistency rather than a stale, unmaintained site."
+             % (min(y for _, y in stale_years), site_newest))
     else:
         f.na("FP-STALE-COPYRIGHT", "No stale copyright year detected.")
 
@@ -279,11 +303,35 @@ def run(workdir):
         f.na("FP-NO-AUTHOR", "No article pages detected on this site.")
 
     # -- 6. Stale year references in headings -------------------------------
+    # Only a year embedded in a substantive heading ("State of X in 2019") is a
+    # staleness signal. Two shapes must NOT fire, or archive-heavy blogs light
+    # up wholesale as a false positive:
+    #   * a heading whose text is essentially just a year — that is a "posts by
+    #     year" archive widget, a navigation control, not a dated claim; and
+    #   * any page that also carries a current-year heading, because a list
+    #     running 2005..2026 is plainly current, not stuck in 2005.
+    # So a page fires only if it has a stale-year heading that is real prose AND
+    # has no current-year heading anywhere on the page.
+    def heading_years(h):
+        return [int(y) for y in re.findall(r"\b(20\d{2})\b", h.get("text", ""))]
+
+    def is_bare_year_heading(h):
+        # Text is a year possibly wrapped in a word or two ("2019", "Archive
+        # 2019", "2019 posts") — not a sentence making a claim about a year.
+        txt = (h.get("text") or "").strip()
+        non_year = re.sub(r"\b20\d{2}\b", "", txt)
+        return A.word_count(non_year) <= 1
+
     old_year_pages = []
     for p in pages:
-        for h in p.get("headings") or []:
-            years = [int(y) for y in re.findall(r"\b(20\d{2})\b", h.get("text", ""))]
-            if years and max(years) < NOW.year - 1:
+        hs = p.get("headings") or []
+        current_here = any(NOW.year in heading_years(h) or
+                           (NOW.year - 1) in heading_years(h) for h in hs)
+        if current_here:
+            continue
+        for h in hs:
+            years = heading_years(h)
+            if years and max(years) < NOW.year - 1 and not is_bare_year_heading(h):
                 old_year_pages.append(p)
                 break
     if old_year_pages:

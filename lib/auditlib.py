@@ -70,10 +70,18 @@ def pages_of_type(snapshot, *types):
 
 
 def ok_pages(snapshot):
-    """Pages that were fetched successfully and carry HTML."""
+    """Pages that were fetched successfully and carry real HTML content.
+
+    Soft-404s (200 responses that are really error pages) are excluded: their
+    markup is not content to audit, and they frequently carry a correct
+    noindex, which would otherwise be mis-reported as a suppressed-snippet
+    defect. Every content check builds on this, so excluding them here fixes
+    the whole class of false positives at once.
+    """
     return [
         p for p in snapshot.get("pages", [])
         if p.get("status") == 200 and p.get("raw_html")
+        and not p.get("soft_404")
     ]
 
 

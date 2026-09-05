@@ -62,12 +62,18 @@ NON_BRAND_HOST = {
 def brand_tokens(snap):
     """Best guess at the brand name, from host and a representative title.
 
+    Returns (tokens, source) where source is:
+      "host"  - a distinctive host label was found (e.g. `python` from
+                `docs.python.org`). This is a reliable anchor.
+      "title" - only title tokens were available; the host was uninformative
+                (a bare TLD label, or all-common words). Findings built on this
+                must be phrased as a hypothesis, not a fact, because the guess
+                can be wrong on an unseen site.
+      "none"  - nothing usable; the caller reports inconclusive.
+
     The host label is chosen carefully: `docs.python.org` must yield `python`,
     not `docs`, or entity-restatement fires a false positive on the entire
-    documentation of a site whose name it never actually looked for. Subdomain
-    and TLD-ish labels are dropped and the most brand-like remaining label is
-    kept. Title tokens come from the home page when present, otherwise from any
-    titled page, so a sample without a home page still has a brand to check.
+    documentation of a site whose name it never actually looked for.
     """
     host = (snap.get("site") or "").lower()
     labels = [l for l in host.split(".") if l]
@@ -77,6 +83,7 @@ def brand_tokens(snap):
             brand_label = l
             break
     toks = {brand_label} if brand_label else set()
+    source = "host" if brand_label else "none"
 
     title = None
     for p in snap.get("pages", []):
@@ -95,7 +102,9 @@ def brand_tokens(snap):
         for t in re.findall(r"[A-Za-z]{3,}", (parts[-1] + " " + parts[0])):
             if t.lower() not in STOPWORDS:
                 toks.add(t.lower())
-    return {t for t in toks if len(t) >= 3}
+                if source == "none":
+                    source = "title"
+    return {t for t in toks if len(t) >= 3}, source
 
 
 def run(workdir):
@@ -206,7 +215,13 @@ def run(workdir):
             "%d question-shaped headings across %d pages are followed by "
             "preamble rather than a direct answer. Example: \"%s\"."
             % (len(unanswered), len(q_pages), unanswered[0][1][:80]),
-            impact="degrading", affected=len(unanswered), sampled=len(q_pages),
+            # Prevalence is page-level: how many of the pages that have question
+            # headings have at least one unanswered one. Using the heading count
+            # as `affected` against a page count as `sampled` produced ratios
+            # like 27/12 (affected > sampled), which is nonsensical evidence.
+            impact="degrading",
+            affected=len({p["final_url"] for p, _ in unanswered}),
+            sampled=len(q_pages),
             confidence="medium",
             affected_urls=sorted({p["final_url"] for p, _ in unanswered}),
             action={
@@ -275,7 +290,7 @@ def run(workdir):
         f.na("AE-NO-HEADING-ANCHORS", "Heading anchors present on most pages.")
 
     # -- 4. Entity restatement ----------------------------------------------
-    brand = brand_tokens(snap)
+    brand, brand_source = brand_tokens(snap)
     if brand:
         thin_mention = []
         for p in substantive:
@@ -286,6 +301,22 @@ def run(workdir):
             if hits < words / 250.0:
                 thin_mention.append(p)
         if len(thin_mention) > len(substantive) * 0.5:
+            # When the brand was only inferred from title text (no distinctive
+            # host label), the guess can be wrong on an unseen site. Phrase the
+            # evidence as an explicit assumption and lower confidence, so a
+            # mis-guessed brand reads as a hypothesis rather than a false claim
+            # that the site never names itself. The severity model then
+            # downgrades it further for the lower confidence.
+            assumed = ", ".join(sorted(brand))
+            if brand_source == "title":
+                detail = ("Assuming the brand is one of {%s} (inferred from the "
+                          "page title; host was uninformative), fewer than one "
+                          "such mention appears per 250 words." % assumed)
+                conf = "low"
+            else:
+                detail = ("Fewer than one mention of the brand (%s) per 250 "
+                          "words." % assumed)
+                conf = "medium"
             f.finding(
                 "AE-ENTITY-NOT-RESTATED",
                 "Body copy rarely names the brand or product it describes",
@@ -295,10 +326,9 @@ def run(workdir):
                 "the passage cannot be attributed to the brand and will not be "
                 "used to answer a question about it.",
                 A.ratio_evidence("substantive pages", len(thin_mention),
-                                 len(substantive),
-                                 "Fewer than one brand mention per 250 words."),
+                                 len(substantive), detail),
                 impact="weakening", affected=len(thin_mention),
-                sampled=len(substantive), confidence="medium",
+                sampled=len(substantive), confidence=conf,
                 affected_urls=[p["final_url"] for p in thin_mention],
                 action={
                     "summary": "Name the brand or product at the start of each "

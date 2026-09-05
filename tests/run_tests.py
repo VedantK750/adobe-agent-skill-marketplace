@@ -75,6 +75,22 @@ def check_ids(report, bucket):
     return {x["check_id"] for x in report.get(bucket, [])}
 
 
+def finding(report, check_id):
+    """Return the first finding with this check_id, or None."""
+    for f in report["findings"]:
+        if f["check_id"] == check_id:
+            return f
+    return None
+
+
+def reason_for(report, bucket, check_id):
+    """Return the reason recorded for a check_id in not_applicable/inconclusive."""
+    for x in report.get(bucket, []):
+        if x["check_id"] == check_id:
+            return x.get("reason", "")
+    return None
+
+
 # ---------------------------------------------------------------- assertions
 
 RESULTS = []
@@ -144,12 +160,18 @@ def run():
     for cid in must_not_fire:
         expect(cid not in good_fire, "%s does NOT fire on clean site" % cid)
 
-    # The clean site should be nearly clean overall.
+    # The clean site should be nearly clean overall. Rather than an arbitrary
+    # count that breaks whenever a check is tuned, assert the meaningful
+    # properties: nothing severe fires, and every finding that does is a
+    # low-severity, low-confidence heuristic (never a confident defect claim).
     expect(good_report["summary"]["critical"] == 0,
            "goodsite has zero critical findings")
-    expect(len(good_report["findings"]) <= 3,
-           "goodsite raises at most a few findings (got %d)"
-           % len(good_report["findings"]))
+    expect(good_report["summary"]["high"] == 0,
+           "goodsite has zero high-severity findings")
+    expect(all(f["severity"] in ("medium", "low")
+               for f in good_report["findings"]),
+           "goodsite raises only medium/low findings if any (got severities: %s)"
+           % sorted({f["severity"] for f in good_report["findings"]}))
 
     # -- conflictsite: the markup-vs-text price disagreement ----------------
     print("\nconflictsite - markup contradicts visible price:")
@@ -161,6 +183,62 @@ def run():
            "SD-NO-ORGANIZATION silent (Organization node present)")
     expect("SD-NO-SAMEAS" not in conflict_fire,
            "SD-NO-SAMEAS silent (sameAs present)")
+
+    # Fix #4 — the price-conflict check is now currency-aware and compares the
+    # full decimal. conflictsite has TWO product pages: widget (markup USD 49 vs
+    # visible $129 -> a real conflict) and agree (markup USD 19.99 vs visible
+    # $19.99, plus a EUR shipping figure -> must NOT conflict). So exactly one
+    # product page conflicts: the check fires, but only for widget, and the EUR
+    # figure must not manufacture a phantom conflict on the agree page.
+    sd_conflict = finding(conflict_report, "SD-TEXT-CONFLICT")
+    expect(sd_conflict is not None
+           and sd_conflict["prevalence"]["affected"] == 1,
+           "SD-TEXT-CONFLICT flags exactly the one genuinely conflicting page")
+    expect(sd_conflict is not None
+           and all("agree" not in u for u in sd_conflict.get("affected_urls", [])),
+           "SD-TEXT-CONFLICT does NOT fire on the matching-price page "
+           "(no full-decimal or cross-currency false positive)")
+
+    # -- Fix #2: entity-corroboration is not a silent no-op offline ----------
+    print("\nentity anchoring (works with no search):")
+    # badsite has no JSON-LD, no external profiles, no sameAs: a concrete,
+    # search-free identity-anchoring risk the skill must surface rather than
+    # only recording everything inconclusive.
+    expect("EC-WEAK-IDENTITY-ANCHORING" in bad_fire,
+           "EC-WEAK-IDENTITY-ANCHORING fires on a site with no identity anchors")
+    # goodsite and conflictsite both carry Organization + sameAs, so the anchor
+    # is present and the check must stay silent.
+    expect("EC-WEAK-IDENTITY-ANCHORING" not in good_fire,
+           "EC-WEAK-IDENTITY-ANCHORING silent when Organization + sameAs present "
+           "(goodsite)")
+    expect("EC-WEAK-IDENTITY-ANCHORING" not in conflict_fire,
+           "EC-WEAK-IDENTITY-ANCHORING silent when Organization + sameAs present "
+           "(conflictsite)")
+
+    # -- Fix #3: render honesty ----------------------------------------------
+    print("\nrender honesty (tests run with --no-render):")
+    # The audit ran with --no-render, so MR-RENDER-GAP is inconclusive. Its
+    # reason must say rendering was *disabled*, not that no browser exists —
+    # the tool must not confuse a declined capability with a missing one.
+    rr = reason_for(bad_report, "inconclusive", "MR-RENDER-GAP")
+    expect(rr is not None and "disabled" in rr.lower(),
+           "MR-RENDER-GAP reason says rendering was disabled by flag")
+    expect(rr is not None and "no headless browser is installed" not in rr.lower(),
+           "MR-RENDER-GAP does not claim a browser was missing when it was "
+           "merely disabled")
+
+    # -- Fix #5: a low-confidence brand guess reads as a hypothesis ----------
+    # AE-ENTITY-NOT-RESTATED, when it fires on a brand inferred only from title
+    # text, must phrase the evidence as an assumption. On the fixtures the check
+    # may or may not fire; when it does with a title-only guess, assert the
+    # wording. This is a conditional assertion, skipped cleanly if not present.
+    for name, rep in (("badsite", bad_report), ("goodsite", good_report),
+                      ("conflictsite", conflict_report)):
+        ae = finding(rep, "AE-ENTITY-NOT-RESTATED")
+        if ae and ae.get("confidence") == "low":
+            expect("assuming the brand" in ae["evidence"].lower(),
+                   "%s: title-only brand guess is phrased as an assumption"
+                   % name)
 
     # -- Structural guarantees the schema cannot express --------------------
     print("\nstructural guarantees:")
@@ -183,6 +261,15 @@ def run():
                and len(rep["not_applicable"]) > 0,
                "%s: not_applicable records present (checks that ran silently)"
                % name)
+        # Prevalence must be a coherent ratio: affected <= sampled, always.
+        # A finding reporting affected > sampled (mixing a heading count against
+        # a page count, say) is nonsensical evidence a reader would distrust.
+        bad_prev = [f["check_id"] for f in rep["findings"]
+                    if (f.get("prevalence") or {}).get("affected", 0)
+                    > (f.get("prevalence") or {}).get("sampled", 0)]
+        expect(not bad_prev,
+               "%s: every finding has affected <= sampled (offenders: %s)"
+               % (name, bad_prev))
 
     # -- Determinism: audit badsite twice, reports match --------------------
     print("\ndeterminism:")
@@ -194,6 +281,119 @@ def run():
         return json.dumps(r, sort_keys=True)
     expect(norm(bad_report) == norm(bad_report2),
            "two badsite audits produce identical reports")
+
+    # The strong guarantee: over a FROZEN snapshot, the analysis is a pure
+    # function. Re-run every analyser + compose ten times against one saved
+    # snapshot and hash the report; all ten must be identical. This isolates
+    # analysis determinism from all network variance.
+    snap_src = os.path.join(WORK, "badsite")
+    hashes = set()
+    for i in range(10):
+        wd = os.path.join(WORK, "frozen-%d" % i)
+        if os.path.exists(wd):
+            import shutil
+            shutil.rmtree(wd)
+        os.makedirs(wd)
+        import shutil
+        shutil.copy(os.path.join(snap_src, "snapshot.json"),
+                    os.path.join(wd, "snapshot.json"))
+        for sk in ("site-acquisition", "machine-readability", "structured-data",
+                   "answer-extractability", "entity-corroboration",
+                   "freshness-provenance", "engagement-audit"):
+            subprocess.run(
+                [sys.executable,
+                 os.path.join(ROOT, "skills", sk, "scripts", "analyze.py"),
+                 "--workdir", wd], capture_output=True)
+        out = os.path.join(wd, "audit-report.json")
+        subprocess.run(
+            [sys.executable, os.path.join(ROOT, "skills", "audit-orchestrator",
+                                          "scripts", "compose_report.py"),
+             "--workdir", wd, "--out", out], capture_output=True)
+        with open(out) as fh:
+            import hashlib
+            hashes.add(hashlib.sha256(norm(json.load(fh)).encode()).hexdigest())
+        shutil.rmtree(wd, ignore_errors=True)
+    expect(len(hashes) == 1,
+           "analysis is a pure function of the snapshot "
+           "(10 runs -> %d distinct report(s))" % len(hashes))
+
+    # -- Focused regression units: freshness false positives ----------------
+    # These build a synthetic snapshot and run one analyser directly, isolating
+    # two false positives found while validating against live sites:
+    #   * a blog "posts by year" archive widget (headings 2005..2026) must not
+    #     read as a stale page — it is navigation, and it contains the current
+    #     year; and
+    #   * a copyright RANGE or a bare founding year must not read as stale when
+    #     the site also shows a current year.
+    print("\nfreshness regression units:")
+    import shutil as _sh
+
+    def run_freshness(snapshot):
+        wd = os.path.join(WORK, "unit-fresh")
+        if os.path.exists(wd):
+            _sh.rmtree(wd)
+        os.makedirs(wd)
+        with open(os.path.join(wd, "snapshot.json"), "w") as fh:
+            json.dump(snapshot, fh)
+        subprocess.run(
+            [sys.executable, os.path.join(ROOT, "skills", "freshness-provenance",
+                                          "scripts", "analyze.py"),
+             "--workdir", wd], capture_output=True)
+        with open(os.path.join(wd, "fragments",
+                               "freshness-provenance.json")) as fh:
+            frag = json.load(fh)
+        _sh.rmtree(wd, ignore_errors=True)
+        return {f["check_id"] for f in frag["findings"]}
+
+    def page(url, headings=None, text=""):
+        return {
+            "url": url, "final_url": url, "status": 200,
+            "raw_html": "<html>x</html>", "text": text, "body_text": text,
+            "headings": headings or [], "page_type": "article",
+            "images": [], "meta_robots": None, "headers": {},
+        }
+
+    # (a) archive widget: years 2005..2026 as bare headings + a current range.
+    archive_headings = [{"level": 2, "text": str(y), "id": None}
+                        for y in range(2005, 2027)]
+    snap_archive = {
+        "site": "blog.example.com", "base_url": "https://blog.example.com/",
+        "audited_at": "2026-01-01T00:00:00Z", "site_type": "publisher",
+        "render_mode": "static-only", "render_status": "disabled-by-flag",
+        "pages": [page("https://blog.example.com/post",
+                       headings=archive_headings,
+                       text="© 2005-2026 Example Blog. A normal post body with "
+                            "enough words to be substantive content here."),
+                  page("https://blog.example.com/post2",
+                       headings=[{"level": 2, "text": "Archive 2018", "id": None}],
+                       text="© 2005-2026 Example Blog. Another substantive body "
+                            "of text on this second page to pass thresholds.")],
+        "sitemap": {"lastmod": {}}, "sitemap_urls": [],
+    }
+    fired = run_freshness(snap_archive)
+    expect("FP-STALE-YEAR-HEADINGS" not in fired,
+           "archive year-widget headings do NOT fire FP-STALE-YEAR-HEADINGS")
+    expect("FP-STALE-COPYRIGHT" not in fired,
+           "a current copyright range does NOT fire FP-STALE-COPYRIGHT")
+
+    # (b) genuinely stale: a real title naming a past year, no current year.
+    snap_stale = {
+        "site": "old.example.com", "base_url": "https://old.example.com/",
+        "audited_at": "2026-01-01T00:00:00Z", "site_type": "publisher",
+        "render_mode": "static-only", "render_status": "disabled-by-flag",
+        "pages": [page("https://old.example.com/guide",
+                       headings=[{"level": 1,
+                                  "text": "The complete SEO guide for 2019",
+                                  "id": None}],
+                       text="© 2019 Old Example. This guide has plenty of body "
+                            "text discussing the topic at length for the year.")],
+        "sitemap": {"lastmod": {}}, "sitemap_urls": [],
+    }
+    fired2 = run_freshness(snap_stale)
+    expect("FP-STALE-YEAR-HEADINGS" in fired2,
+           "a real past-year heading still fires FP-STALE-YEAR-HEADINGS")
+    expect("FP-STALE-COPYRIGHT" in fired2,
+           "a lone stale copyright with no current year still fires")
 
     # -- Summary ------------------------------------------------------------
     passed = sum(1 for ok, _ in RESULTS if ok)

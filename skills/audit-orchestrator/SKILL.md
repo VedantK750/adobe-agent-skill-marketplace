@@ -31,10 +31,15 @@ areas are never touched, and every URL is fetched exactly once.
 
 2. **Analyse.** Run each analysis skill against the snapshot. Each writes a
    findings fragment to `workdir/fragments/`. Run them in this order:
+   `site-acquisition` (its `analyze.py` turns crawl evidence into findings),
    `machine-readability`, `structured-data`, `answer-extractability`,
    `entity-corroboration`, `freshness-provenance`, `engagement-audit`.
-   A skill that fails is recorded and skipped; the pipeline continues so one
-   broken analyser degrades the report rather than losing it.
+   The set of skills run is taken from `marketplace.json`, not hardcoded:
+   `run_audit.py` reads the manifest and runs exactly the skills it declares,
+   in this order, so adding or removing a skill in the manifest changes the
+   pipeline with no code change. A skill that fails is recorded and skipped;
+   the pipeline continues so one broken analyser degrades the report rather
+   than losing it.
 
 3. **Corroborate (needs search).** `entity-corroboration` writes
    `corroboration_targets.json`. If a search tool is available, run those
