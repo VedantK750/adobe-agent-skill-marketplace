@@ -58,27 +58,37 @@ demand on a SaaS product.
 
 ## Page type and site type are coupled — change them together
 
-`classify_site` reads the output of `classify_page`, so a correction to one
-silently changes the other. This is the least obvious failure mode in the file
-and it has already happened once.
+`classify_site` reads the output of `classify_page`, so a change to one moves
+the other. Commerce evidence at site level therefore counts product *and*
+category pages: a storefront is a storefront whether a capped crawl happened to
+sample its `/products/` or its `/collections/`, which is an accident of sitemap
+order. That share is paired with cart language, because a storefront's listings
+repeat "add to cart" and a blog's `/category/` archives do not — without that
+guard the same rule would sweep every WordPress blog into `ecommerce`.
+`tests/run_tests.py` asserts both directions.
 
-Correcting `classify_page` to stop calling Shopify collection pages `product`
-was right on its own terms. But `classify_site` inferred "this is a shop" from
-`product_share`, so that share collapsed and **212 storefronts fell out of
-`ecommerce` into `unknown`** on a 785-site run. Nothing raised an error. Site
-type gates whole checks, so the only visible symptom was a report that had
-quietly stopped running some of them.
+### A warning about how this was nearly mis-diagnosed
 
-Commerce evidence at site level therefore counts product *and* category pages:
-a storefront is a storefront whether a capped crawl happened to sample its
-`/products/` or its `/collections/`, which is an accident of sitemap order. That
-share is paired with cart language, because a storefront's listings repeat "add
-to cart" and a blog's `/category/` archives do not — without that guard the
-same change would sweep every WordPress blog into `ecommerce`.
+A 785-site run showed `ecommerce` falling 370 → 158 and `unknown` rising
+293 → 514, immediately after the `/collections/` page-type correction landed.
+The obvious reading — the page-type fix collapsed `product_share` — was wrong.
 
-The rule: after changing a page-type rule, check the site-type distribution
-across a corpus, not just the page labels. `tests/run_tests.py` asserts both
-directions of this specific coupling.
+The real cause was crawl depth. On the *same* 407 sites at the *same*
+concurrency, median pages crawled fell from 10 to 1, and 143 sites dropped from
+five or more pages to one. With only a home page sampled there is no product or
+category evidence to classify from, so `unknown` is the correct answer. The
+cause of *that* was cumulative rate limiting: the corpus had been run four
+times in a few hours, and a spot check found 4 of 24 sites answering robots.txt
+with 403, 429, 420 or 202 — bot defences, all of them on the one-page sites.
+
+Two lessons worth more than the fix:
+
+- **A site-type distribution shift is not evidence about the classifier until
+  crawl depth is ruled out.** Depth is the confounder; check it first.
+- **Aggregate comparisons across runs are only valid if the runs sampled
+  comparably.** `tests/live_suite.py` now reports median crawl depth and warns
+  when it collapses, because that silently invalidates every rate comparison
+  drawn from the run.
 
 ## Generalisation rule
 
