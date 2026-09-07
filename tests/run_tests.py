@@ -760,6 +760,37 @@ def run():
                                     60, 2), base) == "category",
            "a /products/ URL that is really a dense listing is a category")
 
+    # -- Site type survives the page-type fix -------------------------------
+    # The page-level and site-level classifiers are coupled, and the coupling is
+    # easy to break silently. Correcting classify_page to stop calling Shopify
+    # collection pages `product` collapsed `product_share`, and 212 storefronts
+    # fell out of `ecommerce` into `unknown` on a 785-site run. Nothing failed;
+    # site type merely gates whole checks, so it quietly changed what ran.
+    # Assert both directions: a collections-led storefront is still commerce,
+    # and a blog's /category/ archives are still not.
+    print("\nsite type vs page type coupling:")
+    from classify import classify_site
+
+    shop_pages = [store_page(base + "collections/c%d" % i, grid_text, 50, 3)
+                  for i in range(6)]
+    shop_pages.append(store_page(base, grid_text, 40, 3))
+    for pg in shop_pages:
+        pg["page_type"] = classify_page(pg, base)
+    expect(classify_site(shop_pages) == "ecommerce",
+           "a storefront sampled mostly at /collections/ is still ecommerce "
+           "(got %s)" % classify_site(shop_pages))
+
+    blog_text = ("Posted on 12 March. A long read about migrating a database "
+                 "without downtime, with notes on replication lag and cutover.")
+    blog_pages = [store_page("https://blog.example.com/category/eng/p%d" % i,
+                             blog_text, 30, 4) for i in range(6)]
+    blog_pages.append(store_page("https://blog.example.com/", blog_text, 30, 4))
+    for pg in blog_pages:
+        pg["page_type"] = classify_page(pg, "https://blog.example.com/")
+    expect(classify_site(blog_pages) != "ecommerce",
+           "a blog's /category/ archives do NOT make it a storefront (got %s)"
+           % classify_site(blog_pages))
+
     # -- Summary ------------------------------------------------------------
     passed = sum(1 for ok, _ in RESULTS if ok)
     total = len(RESULTS)

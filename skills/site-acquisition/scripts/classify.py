@@ -223,6 +223,23 @@ def classify_site(pages):
     product_share = types.count("product") / n
     article_share = types.count("article") / n
     doc_share = types.count("documentation") / n
+    # Commerce evidence counts category listings alongside product pages. A
+    # storefront is a storefront whether this crawl happened to sample its
+    # /products/ pages or its /collections/ pages, and which of the two a capped
+    # crawl reaches is an accident of sitemap order.
+    #
+    # This is not hypothetical tidiness. When the page classifier was corrected
+    # to stop calling Shopify collection pages `product`, `product_share`
+    # collapsed and 212 storefronts fell out of `ecommerce` into `unknown` on a
+    # 785-site run: a page-level fix silently breaking the site-level inference
+    # that reads its output. Site type gates whole checks, so that changed what
+    # ran without anything failing.
+    #
+    # `product_share` itself is left alone -- the publisher fallback below uses
+    # it to rule commerce out, and a blog's /category/ archives must not read as
+    # a shop. That is also why this share is paired with cart language: a
+    # storefront's listings repeat "add to cart"; an editorial archive does not.
+    commerce_share = (types.count("product") + types.count("category")) / n
 
     # Strong ecommerce evidence is a real SHARE of product pages or Product/
     # Offer schema on a meaningful fraction of pages — never a single Product
@@ -237,8 +254,10 @@ def classify_site(pages):
         if any(t in ("product", "offer") for t in dts):
             pages_with_product += 1
     product_schema_share = pages_with_product / n
-    strong_ecom = product_share >= 0.15 or product_schema_share >= 0.2
     cart_hits = len(CART_RE.findall(text))
+    strong_ecom = (product_share >= 0.15
+                   or product_schema_share >= 0.2
+                   or (commerce_share >= 0.3 and cart_hits >= 2))
     # Article- or documentation-dominant sites are classified as such even if a
     # stray Product node is present, so a lone shop widget cannot override a
     # clearly editorial or documentation site.

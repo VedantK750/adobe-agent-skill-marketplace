@@ -56,6 +56,30 @@ Site type gates whole checks. `EC-NAP-INCOMPLETE` runs only for
 `local-business`, because name-address-phone consistency is not a meaningful
 demand on a SaaS product.
 
+## Page type and site type are coupled — change them together
+
+`classify_site` reads the output of `classify_page`, so a correction to one
+silently changes the other. This is the least obvious failure mode in the file
+and it has already happened once.
+
+Correcting `classify_page` to stop calling Shopify collection pages `product`
+was right on its own terms. But `classify_site` inferred "this is a shop" from
+`product_share`, so that share collapsed and **212 storefronts fell out of
+`ecommerce` into `unknown`** on a 785-site run. Nothing raised an error. Site
+type gates whole checks, so the only visible symptom was a report that had
+quietly stopped running some of them.
+
+Commerce evidence at site level therefore counts product *and* category pages:
+a storefront is a storefront whether a capped crawl happened to sample its
+`/products/` or its `/collections/`, which is an accident of sitemap order. That
+share is paired with cart language, because a storefront's listings repeat "add
+to cart" and a blog's `/category/` archives do not — without that guard the
+same change would sweep every WordPress blog into `ecommerce`.
+
+The rule: after changing a page-type rule, check the site-type distribution
+across a corpus, not just the page labels. `tests/run_tests.py` asserts both
+directions of this specific coupling.
+
 ## Generalisation rule
 
 Classification uses schema types, URL shape and structural evidence only.
