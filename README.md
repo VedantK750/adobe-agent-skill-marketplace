@@ -230,6 +230,7 @@ the suite, and every fixture passed at the time each was found:
 | `AE-NO-DEFINITION` | Asserted "no definition" on pages too text-sparse to read, restating a readability defect as a content one |
 | Wall-clock budget | Checked only between fetches, so one request's retry tail could push an audit past the 5-minute ceiling |
 | Evidence hygiene | `ACC-NO-RESPONSE` rendered "ConnectionError: None" — a Python artefact shown to a reader |
+| Site/page type coupling | Fixing the `/collections/` page type collapsed `product_share`, dropping **212 storefronts** from `ecommerce` to `unknown`. Nothing errored; site type gates whole checks, so the report quietly stopped running some |
 
 The last four came specifically from the D2C corpus, and they are the reason it
 exists: muted hero video, tag-manager iframes, form-wrapped cart buttons and
