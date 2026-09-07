@@ -10,6 +10,10 @@ allowed-tools: [Bash, Read, Write]
 ## When to use
 After `site-acquisition`. Reads `snapshot.json`; never touches the network.
 
+## Inputs
+- `--workdir DIR` (required) — a directory holding `snapshot.json`.
+  No other input. The skill is a pure function of that file.
+
 ## The mechanism
 Step three of the pipeline, and the one most audits skip. Retrieval returns a
 fragment of a page, not the page. A passage that only makes sense after
@@ -45,8 +49,25 @@ three or more sections before anchors are assessed, five or more titled pages
 before duplicates are reported. Where the site is too small or too sparse to
 judge, the check reports `not_applicable` or `inconclusive` rather than firing.
 
-## Run
-`python3 scripts/analyze.py --workdir DIR`
+## Procedure
+1. Load `snapshot.json`; take HTML pages, excluding `legal` and `listing`
+   types — prose quality is not what those pages are for.
+2. Split each page's body text into approximate 90-word retrieval chunks,
+   the unit a consumer actually receives.
+3. Judge each chunk as if it stood alone: does it open with a pronoun whose
+   referent is outside the chunk (`AE-CHUNK-DEPENDENCE`), and is the brand
+   recoverable from it (`AE-ENTITY-NOT-RESTATED`)?
+4. Pair question-shaped headings with the sentences immediately beneath them
+   and check whether an answer arrives directly or after preamble.
+5. Check the home page for a plain "X is a Y that does Z" definitional
+   sentence, and headings for stable anchors a citation could deep-link to.
+6. Check thin pages, duplicate titles and missing meta descriptions, each
+   against its own minimum denominator.
+7. Write the fragment. Where the site is too small or too sparse to judge,
+   record `not_applicable` or `inconclusive` rather than firing.
+
+Run: `python3 scripts/analyze.py --workdir DIR`
 
 ## Output
-`fragments/answer-extractability.json`.
+`fragments/answer-extractability.json` — findings, `not_applicable` and
+`inconclusive` records for the orchestrator to compose.

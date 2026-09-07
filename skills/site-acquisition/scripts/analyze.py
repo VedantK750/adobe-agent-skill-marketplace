@@ -17,11 +17,164 @@ import auditlib as A  # noqa: E402
 SKILL = "site-acquisition"
 
 
+def classify_transport_failure(errors):
+    """Name what kind of no-response this was, and give the matching fix.
+
+    "The site did not respond" is true of a dead DNS record, an expired
+    certificate and a live site that hangs on non-browser clients alike -- but
+    those are three different defects with three different fixes, and a report
+    that cannot tell them apart sends the reader to the wrong place. The
+    exception type the transport raised distinguishes them, so use it.
+
+    The distinction that matters most is the last one: a timeout usually does
+    not mean the site is down. It means a bot filter or rate limiter is hanging
+    a well-behaved crawler while serving browsers normally -- which is still a
+    genuine, and frequently invisible, AI-discoverability defect, because
+    assistant fetchers are throttled by exactly the same rule.
+    """
+    names = " ".join((e.get("error") or "") for e in errors).lower()
+
+    if "timeout" in names or "timedout" in names:
+        return (
+            "read/connect timeout",
+            "The site does not answer automated clients in time",
+            "Requests were sent politely, one at a time with a delay, and every "
+            "one hung until it timed out rather than being refused. A site that "
+            "is down refuses connections; one that hangs is usually reachable "
+            "for browsers and being stalled for everything else.",
+            [
+                "Confirm the site loads normally in a browser. If it does, the "
+                "problem is selective: something is treating non-browser "
+                "clients differently.",
+                "Check the WAF, CDN bot-management and rate-limit rules for any "
+                "action that stalls, tarpits or silently drops unknown user "
+                "agents instead of answering them.",
+                "Allow-list the assistant crawlers you want citations from "
+                "(GPTBot, ClaudeBot, PerplexityBot, CCBot and similar) so they "
+                "receive a real response; use robots.txt to express what they "
+                "may read, rather than the network layer to make them wait.",
+                "Check origin health under load: an origin that answers a "
+                "browser from cache can still time out on an uncached path.",
+            ])
+
+    if "ssl" in names or "certificate" in names or "tls" in names:
+        return (
+            "TLS failure",
+            "The site's TLS handshake fails, so no page can be fetched",
+            "A certificate that a browser tolerates -- or that a visitor has "
+            "clicked through -- still stops every automated client, which will "
+            "not click through anything.",
+            [
+                "Check the certificate's expiry, chain completeness and the "
+                "names it covers, from outside your network.",
+                "Confirm the certificate covers the exact hostname requested, "
+                "including both the apex and www variants.",
+                "Serve the full intermediate chain: a missing intermediate "
+                "works in browsers that cache it and fails everywhere else.",
+            ])
+
+    if "toomanyredirects" in names or "redirect" in names:
+        return (
+            "redirect loop",
+            "The site's redirects loop, so no page is ever reached",
+            "A redirect cycle never terminates at a document, so a fetcher "
+            "gives up having read nothing.",
+            [
+                "Trace the redirect chain from the bare domain and find the "
+                "cycle.",
+                "Check the interaction between the http-to-https, apex-to-www "
+                "and locale redirects; loops usually live where two of these "
+                "rules meet.",
+            ])
+
+    return (
+        "connection failure",
+        "The site did not respond to any request",
+        "The connection could not be established at all, which points at DNS "
+        "or at the origin refusing connections rather than at anything in the "
+        "site's content.",
+        [
+            "Resolve the hostname from an off-network machine and confirm the "
+            "A/AAAA (or CNAME) records point at a live host.",
+            "Confirm the origin accepts connections on ports 80 and 443 for "
+            "both the apex and www hostnames.",
+            "Check whether a firewall or geo-block is refusing the ranges that "
+            "crawlers connect from.",
+            "Re-run the audit once a plain GET to the home page returns an "
+            "HTTP status from outside your own network.",
+        ])
+
+
+def clean_error(raw):
+    """Make a stored transport error safe to show a reader.
+
+    Snapshots taken by an older crawler can carry "ConnectionError: None",
+    because several urllib3 exceptions stringify to "None". Reporting that in
+    evidence shows a Python artefact to someone who only wants to know why
+    their site was unreachable, so strip it here as well as at the source.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return "no response"
+    raw = re.sub(r":\s*(?:None|)\s*$", "", raw).strip()
+    return raw or "no response"
+
+
 def run(workdir):
     snap = A.load_snapshot(workdir)
-    f = A.Fragment(SKILL)
+    f = A.Fragment(SKILL, snapshot=snap)
     pages = snap.get("pages", [])
     robots = snap.get("robots", {})
+
+    # -- did the host respond at all? ----------------------------------------
+    # Step zero of the pipeline: before "is the crawler let in" comes "does the
+    # origin answer". A DNS failure, refused connection or total timeout leaves
+    # every page carrying a transport error and no HTTP status at all. Without
+    # this check the downstream checks each report their own symptom -- "no
+    # robots.txt", "no sitemap" -- which is a misdiagnosis: nothing about the
+    # site was observed, so nothing about its markup can be asserted. Report the
+    # single true root cause and mark the checks that depend on a response
+    # inconclusive rather than letting them fire on the absence of evidence.
+    responded = [p for p in pages if p.get("status")]
+    transport_errors = [p for p in pages if p.get("error")]
+    site_unreachable = bool(transport_errors) and not responded
+
+    if site_unreachable:
+        kind, title, detail, steps = classify_transport_failure(transport_errors)
+        f.finding(
+            "ACC-NO-RESPONSE",
+            title,
+            "discoverability",
+            "Retrieval begins with a successful fetch. When a well-behaved "
+            "client gets no response, no assistant, crawler or index can read a "
+            "single page, so the brand is absent from every system that builds "
+            "answers from live fetches, regardless of what the content says. "
+            "An assistant's fetcher is less patient and less persistent than "
+            "this audit was, so whatever stopped us stops it sooner.",
+            "%s to %s returned no HTTP response (%s). First transport error: "
+            "%s. %s"
+            % (A.plural(len(transport_errors), "request"),
+               snap.get("base_url", "the site"), kind,
+               clean_error(transport_errors[0].get("error")), detail),
+            impact="blocking", affected=len(transport_errors),
+            sampled=len(transport_errors), page_importance="critical",
+            affected_urls=[p.get("url", "") for p in transport_errors],
+            action={
+                "summary": "Make the origin answer a plain GET from outside "
+                           "your own network, then re-run the audit.",
+                "effort": "low",
+                "steps": steps,
+                "expected_impact": "Pages become fetchable, which is the "
+                                   "precondition for every other signal in "
+                                   "this report.",
+                "verification": "A plain GET to the home page, from an external "
+                                "network and with a non-browser user agent, "
+                                "returns an HTTP status code within a few "
+                                "seconds; re-run the audit and ACC-NO-RESPONSE "
+                                "clears.",
+            })
+    else:
+        f.na("ACC-NO-RESPONSE", "The origin returned HTTP responses.")
 
     # -- AI crawler exclusion ------------------------------------------------
     blocked = robots.get("ai_agents_blocked") or []
@@ -87,7 +240,14 @@ def run(workdir):
     else:
         f.na("ACC-BLANKET-DISALLOW", "No wildcard root disallow present.")
 
-    if not robots.get("present"):
+    if site_unreachable:
+        # The absence of a robots.txt cannot be distinguished from the absence
+        # of a working origin. Asserting "no robots.txt served" here would be
+        # reporting our own transport failure as the site's defect.
+        f.unknown("ACC-NO-ROBOTS",
+                  "The origin returned no HTTP response, so whether robots.txt "
+                  "is served could not be determined (see ACC-NO-RESPONSE).")
+    elif not robots.get("present"):
         f.finding(
             "ACC-NO-ROBOTS",
             "No robots.txt served",
@@ -114,7 +274,11 @@ def run(workdir):
     # -- sitemap -------------------------------------------------------------
     sm = snap.get("sitemap", {})
     url_count = sm.get("url_count", 0)
-    if url_count > 0:
+    if site_unreachable:
+        f.unknown("ACC-NO-SITEMAP",
+                  "The origin returned no HTTP response, so the presence of a "
+                  "sitemap could not be determined (see ACC-NO-RESPONSE).")
+    elif url_count > 0:
         f.na("ACC-NO-SITEMAP", "Sitemap found with %d URLs." % url_count)
     elif sm.get("found"):
         # A sitemap file WAS fetched but yielded no usable <url> entries within

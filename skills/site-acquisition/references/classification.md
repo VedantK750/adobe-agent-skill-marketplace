@@ -25,6 +25,27 @@ causes a reader to discount the other findings too.
    category listing rather than a product detail page.
 4. **Content shape fallback** when the URL is uninformative.
 
+### When the URL is explicit, structural evidence does not overrule it
+
+A path segment of `collections` or `category` is not a weak guess — it is the
+site stating the page's role. Structural evidence may only *refine* it.
+
+This distinction was learned the expensive way. Storefront grids show a price
+on every tile and, on most themes, a quick-add control on every tile too. A
+shared "has cart language or has prices → product" rule therefore promoted
+every `/collections/` page to `product`, and the structured-data check then
+reported "no Product schema" on a listing — which correctly has none, because
+forty items is an `ItemList`, not a `Product`. Since `/collections/` is the
+default path of the most widely used commerce platform, this misfired on a
+large share of exactly the sites the audit is most often pointed at.
+
+The rule now runs in both directions and each needs decisive evidence to move:
+
+- a `category` URL becomes `product` only where the page is genuinely a single
+  item — cart control, few onward links, few sections;
+- a `product` URL becomes `category` only where it is a dense listing — many
+  links and repeated prices with no cart control.
+
 ## Site types
 
 `ecommerce`, `local-business`, `software`, `publisher`, `documentation`,

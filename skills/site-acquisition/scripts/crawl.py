@@ -63,6 +63,30 @@ def session():
     return s
 
 
+def budgeted(deadline, timeout=DEFAULT_TIMEOUT, retries=FETCH_RETRIES):
+    """Shrink a fetch's timeout and retry count to fit the time remaining.
+
+    The wall-clock budget used to be checked only *between* fetches, so a crawl
+    could pass the check at 179 seconds and then spend another 38 on one
+    request's timeout-and-retry tail. On a slow network that tail happened
+    repeatedly and pushed whole audits past the brief's five-minute ceiling --
+    seen on a 785-site run, where four sites blew the budget outright.
+
+    Bounding each fetch by the time actually left makes the budget a guarantee
+    rather than a hope: the crawl cannot overrun it by more than one shortened
+    request. Returns (timeout, retries), with retries dropped first because a
+    retry is a nice-to-have and finishing is not.
+    """
+    left = deadline - time.time()
+    if left <= 0:
+        return 0.1, 0
+    if left < timeout:
+        return max(0.5, left), 0
+    if left < timeout * (retries + 1):
+        return timeout, max(0, int(left // timeout) - 1)
+    return timeout, retries
+
+
 def fetch(sess, url, timeout=DEFAULT_TIMEOUT, retries=FETCH_RETRIES):
     """GET a URL. Returns a dict; never raises.
 
@@ -102,15 +126,39 @@ def fetch(sess, url, timeout=DEFAULT_TIMEOUT, retries=FETCH_RETRIES):
         "url": url, "final_url": url, "status": None, "redirect_chain": [],
         "content_type": "", "headers": {}, "raw_html": "", "bytes": 0,
         "elapsed_ms": int((time.time() - started) * 1000),
-        "error": "%s: %s" % (type(last_exc).__name__, last_exc),
+        "error": describe_exception(last_exc),
     }
+
+
+def describe_exception(exc):
+    """A transport error as a reader-facing string.
+
+    `"%s: %s" % (type(exc).__name__, exc)` is right most of the time and wrong
+    in a way that reaches the report: several urllib3 and requests exceptions
+    stringify to "None" or to empty, so the evidence read "First transport
+    error: ConnectionError: None" -- a Python artefact shown to someone who
+    just wants to know why their site could not be reached. Fall back to the
+    exception type alone, which is the part that carries meaning anyway.
+    """
+    if exc is None:
+        return "no response"
+    name = type(exc).__name__
+    detail = str(exc).strip()
+    if not detail or detail.lower() == "none":
+        return name
+    # Collapse the nested "HTTPSConnectionPool(...): Max retries exceeded with
+    # url: ... (Caused by ...)" wrapper, which is mostly noise to a reader.
+    detail = re.sub(r"\s+", " ", detail)
+    if len(detail) > 300:
+        detail = detail[:300].rstrip() + "..."
+    return "%s: %s" % (name, detail)
 
 
 # ---------------------------------------------------------------- robots
 
-def read_robots(sess, base):
+def read_robots(sess, base, deadline=None):
     url = up.urljoin(base, "/robots.txt")
-    body, status = _get_text(sess, url)
+    body, status = _get_text(sess, url, deadline=deadline)
     info = {
         "url": url,
         "present": status == 200,
@@ -174,14 +222,20 @@ SITEMAP_FILE_LIMIT = 6
 SITEMAP_TIME_BUDGET = 30  # seconds
 
 
-def _get_text(sess, url, retries=FETCH_RETRIES):
+def _get_text(sess, url, retries=FETCH_RETRIES, deadline=None):
     """Fetch a text/XML resource (robots, sitemap). Returns ("", reason) on
     failure. Transient errors are retried so a flaky robots/sitemap fetch does
     not needlessly strip the crawl of its seed URLs."""
+    # robots.txt and the sitemap are fetched before the crawl loop begins, so
+    # their timeout tail eats the same budget the page crawl needs. Shrink them
+    # to what is left, and prefer spending the remaining time on pages: a
+    # missing sitemap degrades the sample, an exhausted budget ends the audit.
+    timeout, retries = (DEFAULT_TIMEOUT, retries) if deadline is None \
+        else budgeted(deadline, DEFAULT_TIMEOUT, retries)
     last = "error"
     for attempt in range(retries + 1):
         try:
-            r = sess.get(url, timeout=DEFAULT_TIMEOUT, allow_redirects=True)
+            r = sess.get(url, timeout=timeout, allow_redirects=True)
             if r.status_code != 200:
                 return "", r.status_code
             return r.text, 200
@@ -192,7 +246,8 @@ def _get_text(sess, url, retries=FETCH_RETRIES):
     return "", last
 
 
-def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT):
+def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT,
+                  deadline=None):
     candidates = list(robots_info.get("sitemaps") or [])
     if not candidates:
         candidates = [up.urljoin(base, "/sitemap.xml")]
@@ -210,7 +265,7 @@ def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT):
         if sm in seen_maps:
             continue
         seen_maps.add(sm)
-        body, status = _get_text(sess, sm)
+        body, status = _get_text(sess, sm, deadline=deadline)
         if not body:
             errors.append("%s -> %s" % (sm, status))
             continue
@@ -274,12 +329,30 @@ def normalise(url):
 
 
 def links_from(html, base_url):
+    """Internal + external links on a page, normalised and absolute.
+
+    Parsed, not pattern-matched. An earlier regex required quoted href values
+    (`href\\s*=\\s*["'](...)["']`), which silently returned zero links for any
+    page written with unquoted attributes -- `<a href=/foo>`, valid HTML5 and
+    the house style of a good deal of hand-written and generated markup. The
+    failure was invisible in the worst way: the crawl simply ended after the
+    seed page, so every downstream check ran on a one-page sample and the report
+    looked merely thin rather than broken. Found on a live corpus run, where a
+    well-known blog with 209 anchors on its home page yielded 0 links.
+
+    A real parser also handles the rest of the family the regex got wrong:
+    attributes in single, double or no quotes, newlines inside the tag, and
+    stray `<` in preceding attribute values.
+    """
     out = []
-    for m in re.finditer(r'(?is)<a\b[^>]*href\s*=\s*["\']([^"\']+)["\']', html or ""):
-        href = m.group(1).strip()
-        if href.startswith(("mailto:", "tel:", "javascript:", "#")):
+    for a in A.soup(html or "").find_all("a", href=True):
+        href = (a.get("href") or "").strip()
+        if not href or href.startswith(("mailto:", "tel:", "javascript:", "#")):
             continue
-        absolute = up.urljoin(base_url, href)
+        try:
+            absolute = up.urljoin(base_url, href)
+        except ValueError:
+            continue  # malformed href (e.g. a bare IPv6 bracket); skip it
         if not absolute.startswith(("http://", "https://")):
             continue
         if SKIP_EXT.search(up.urlparse(absolute).path):
@@ -499,13 +572,18 @@ def page_meta(html, url):
 
 def crawl(start_url, workdir, max_pages, delay, render):
     started = time.time()
+    # One deadline for the whole acquisition phase -- robots, sitemap and the
+    # crawl loop together. Every fetch below shortens itself to fit what is
+    # left of it, so the phase cannot overrun regardless of how slow or how
+    # unresponsive the target turns out to be.
+    deadline = started + WALL_CLOCK_BUDGET
     if not start_url.startswith(("http://", "https://")):
         start_url = "https://" + start_url
     base = normalise(start_url)
     sess = session()
 
-    robots_info, rp = read_robots(sess, base)
-    sitemap_info = read_sitemaps(sess, base, robots_info)
+    robots_info, rp = read_robots(sess, base, deadline)
+    sitemap_info = read_sitemaps(sess, base, robots_info, deadline=deadline)
 
     # Seed order: home first, then a *diversified* pass over sitemap URLs.
     # Sitemaps are frequently clustered by section (e.g. a partition that is
@@ -568,7 +646,7 @@ def crawl(start_url, workdir, max_pages, delay, render):
             skipped_quota += 1
             continue
 
-        res = fetch(sess, url)
+        res = fetch(sess, url, *budgeted(deadline))
         fetches += 1
         time.sleep(delay)
 

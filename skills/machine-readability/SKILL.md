@@ -10,6 +10,11 @@ allowed-tools: [Bash, Read, Write]
 ## When to use
 After `site-acquisition`. Reads `snapshot.json`; never touches the network.
 
+## Inputs
+- `--workdir DIR` (required) — a directory holding `snapshot.json`.
+  Rendered DOM is used when the snapshot carries it; when it does not, the
+  render-dependent check reports `inconclusive` rather than guessing.
+
 ## The mechanism
 Step two of the pipeline: once a machine is inside, can it read the page? A
 page that looks complete to a person is not always complete to a program.
@@ -42,9 +47,25 @@ computed. Alt coverage is not assessed at all below ten content images.
 Percentage thresholds, not absolute counts, so small sites are judged on the
 same basis as large ones.
 
-## Run
-`python3 scripts/analyze.py --workdir DIR`
+## Procedure
+1. Load `snapshot.json` and take the successfully fetched HTML pages.
+2. If the snapshot carries rendered DOM, diff raw-HTML text against rendered
+   text per page and report the delta as `MR-RENDER-GAP`. If it does not,
+   record `inconclusive` naming the reason — a browser that was absent and one
+   that was declined by flag are different facts and are reported as such.
+3. Run the static proxy regardless: script-tag count against body-text volume,
+   which detects a client-rendered shell with no browser involved.
+4. Classify each image as content or decoration by filename pattern, then
+   assess alt coverage over content images only, and only above ten of them.
+5. Check heading structure (absent or competing H1) and the presence of a
+   `<main>` landmark, which is what lets an extractor separate body copy from
+   navigation.
+6. Check for substance delivered inside iframes, which belongs to another
+   document and is generally not followed.
+7. Write the fragment with impact classes, not severities.
+
+Run: `python3 scripts/analyze.py --workdir DIR`
 
 ## Output
-`fragments/machine-readability.json` — findings, not-applicable and
-inconclusive records for the orchestrator to compose.
+`fragments/machine-readability.json` — findings, `not_applicable` and
+`inconclusive` records for the orchestrator to compose.

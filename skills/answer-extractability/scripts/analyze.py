@@ -29,6 +29,12 @@ DANGLING_OPENER = re.compile(
 DEFINITION = re.compile(
     r"\b\w[\w '&-]{1,60}\s+(?:is|are|was|were)\s+(?:a|an|the)\s+\w+", re.I)
 
+# Below this many readable words on the home page, "no definitional sentence"
+# is not a finding about the page -- it is a restatement of the fact that the
+# page produced almost no text, which the machine-readability checks already
+# own. Storefronts that render entirely client-side land here routinely.
+MIN_HOME_WORDS = 50
+
 STOPWORDS = set("""the a an and or of to in for with on at by from as is are was
 were be been it its this that these those our we you your they their he she
 his her not no but if then than so such very more most can will would should
@@ -109,7 +115,7 @@ def brand_tokens(snap):
 
 def run(workdir):
     snap = A.load_snapshot(workdir)
-    f = A.Fragment(SKILL)
+    f = A.Fragment(SKILL, snapshot=snap)
     pages = [p for p in A.ok_pages(snap)
              if p.get("page_type") not in ("legal", "listing")]
 
@@ -212,9 +218,10 @@ def run(workdir):
             "supplies the query match and the sentence supplies the citable "
             "text. When the answer arrives several paragraphs later, the chunk "
             "containing the heading contains no answer to extract.",
-            "%d question-shaped headings across %d pages are followed by "
-            "preamble rather than a direct answer. Example: \"%s\"."
-            % (len(unanswered), len(q_pages), unanswered[0][1][:80]),
+            "%s across %s are followed by preamble rather than a direct "
+            "answer. Example: \"%s\"."
+            % (A.plural(len(unanswered), "question-shaped heading"),
+               A.plural(len(q_pages), "page"), unanswered[0][1][:80]),
             # Prevalence is page-level: how many of the pages that have question
             # headings have at least one unanswered one. Using the heading count
             # as `affected` against a page count as `sampled` produced ratios
@@ -351,8 +358,34 @@ def run(workdir):
     # -- 5. Definitional sentence on the home page ---------------------------
     home = [p for p in pages if p.get("page_type") == "home"]
     if home:
-        htext = home[0].get("body_text") or ""
-        if not DEFINITION.search(htext[:2500]):
+        # Look in BOTH views of the page, and accept a definition found in
+        # either. Each view alone misses a different real case:
+        #   * the chrome-stripped body drops a definition written into a hero
+        #     block or a header strapline, which an extractor does read;
+        #   * the full visible text keeps those, but on a storefront its first
+        #     characters are mega-menu, promo bar and consent copy, which push
+        #     real body prose past the window and lose it.
+        # Measured across both corpora, each view alone raised findings the
+        # other correctly cleared. The union is strictly safer than either:
+        # a sentence found in either view is genuinely on the page, so taking
+        # both can only lower the firing rate, never invent a defect.
+        hbody = home[0].get("body_text") or ""
+        hfull = home[0].get("text") or ""
+        home_words = max(A.word_count(hbody), A.word_count(hfull))
+        if home_words < MIN_HOME_WORDS:
+            # Not "there is no definition" but "there is not enough readable
+            # text to tell". Asserting the former from an unreadable page is the
+            # same error as generalising a site-wide claim from one page: the
+            # evidence is absent, not negative. The readability skill owns the
+            # actual defect here (MR-EMPTY-SHELL / MR-RENDER-GAP).
+            f.unknown(
+                "AE-NO-DEFINITION",
+                "The home page yielded only %d words of readable text, too "
+                "little to judge whether it defines the brand. The absence of "
+                "readable text is itself the finding -- see the "
+                "machine-readability checks." % home_words)
+        elif not (DEFINITION.search(hbody[:2500])
+                  or DEFINITION.search(hfull[:2500])):
             f.finding(
                 "AE-NO-DEFINITION",
                 "Home page states no plain definition of what the brand is",
@@ -361,8 +394,10 @@ def run(workdir):
                 "first surfaced. Answering it requires one explicit sentence of "
                 "the form \"X is a Y that does Z\" in readable text. Slogans and "
                 "value propositions do not supply it.",
-                "No definitional sentence found in the first 2500 characters of "
-                "home page body text.",
+                "Read %d words of home page text; no sentence of the form "
+                "\"<name> is a/an <category>...\" appears in the first 2500 "
+                "characters of either the body copy or the full visible text "
+                "(hero and header copy included)." % home_words,
                 impact="degrading", affected=1, sampled=1, page_importance="high",
                 confidence="medium",
                 affected_urls=[home[0]["final_url"]],

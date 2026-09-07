@@ -23,6 +23,7 @@ import functools
 import http.server
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -394,6 +395,370 @@ def run():
            "a real past-year heading still fires FP-STALE-YEAR-HEADINGS")
     expect("FP-STALE-COPYRIGHT" in fired2,
            "a lone stale copyright with no current year still fires")
+
+    # -- Unreachable-origin regression unit ---------------------------------
+    # A host that answers nothing (DNS failure, refused connection, bot filter
+    # dropping non-browser agents) used to be misdiagnosed: the robots and
+    # sitemap checks each reported their own symptom ("No robots.txt served",
+    # "No usable XML sitemap"), asserting facts about markup that was never
+    # observed. The correct behaviour is one blocking finding naming the true
+    # root cause, with the response-dependent checks recording `inconclusive`.
+    print("\nunreachable-origin regression unit:")
+
+    def run_acquisition(snapshot):
+        wd = os.path.join(WORK, "unit-acc")
+        if os.path.exists(wd):
+            _sh.rmtree(wd)
+        os.makedirs(wd)
+        with open(os.path.join(wd, "snapshot.json"), "w") as fh:
+            json.dump(snapshot, fh)
+        subprocess.run(
+            [sys.executable, os.path.join(ROOT, "skills", "site-acquisition",
+                                          "scripts", "analyze.py"),
+             "--workdir", wd], capture_output=True)
+        with open(os.path.join(wd, "fragments",
+                               "site-acquisition.json")) as fh:
+            frag = json.load(fh)
+        _sh.rmtree(wd, ignore_errors=True)
+        return frag
+
+    dead_page = {
+        "url": "https://dead.example.com/", "final_url": "https://dead.example.com/",
+        "status": None, "error": "ConnectionError: name resolution failed",
+        "raw_html": "", "redirect_chain": [], "headers": {}, "page_type": "other",
+    }
+    snap_dead = {
+        "site": "dead.example.com", "base_url": "https://dead.example.com/",
+        "audited_at": "2026-01-01T00:00:00Z", "site_type": "unknown",
+        "render_mode": "static-only", "render_status": "disabled-by-flag",
+        "robots": {"url": "https://dead.example.com/robots.txt",
+                   "present": False, "status": "ConnectionError"},
+        "sitemap": {"found": False, "url_count": 0, "checked": [], "errors": []},
+        "sitemap_urls": [], "pages": [dead_page],
+    }
+    frag_dead = run_acquisition(snap_dead)
+    dead_fire = {x["check_id"] for x in frag_dead["findings"]}
+    dead_unknown = {x["check_id"] for x in frag_dead["inconclusive"]}
+    expect("ACC-NO-RESPONSE" in dead_fire,
+           "ACC-NO-RESPONSE fires when the origin returns no HTTP response")
+    expect(any(x["check_id"] == "ACC-NO-RESPONSE" and x["impact"] == "blocking"
+               for x in frag_dead["findings"]),
+           "ACC-NO-RESPONSE carries blocking impact (composes to critical)")
+    expect("ACC-NO-ROBOTS" not in dead_fire
+           and "ACC-NO-ROBOTS" in dead_unknown,
+           "ACC-NO-ROBOTS is inconclusive, not a finding, on a dead origin")
+    expect("ACC-NO-SITEMAP" not in dead_fire
+           and "ACC-NO-SITEMAP" in dead_unknown,
+           "ACC-NO-SITEMAP is inconclusive, not a finding, on a dead origin")
+
+    # The converse: a live origin that genuinely serves no robots.txt must
+    # still report it. Suppressing the symptom must be conditional on the
+    # transport failure, not a blanket softening of the check.
+    live_page = dict(dead_page, status=200, error=None,
+                     raw_html="<html><body><p>Hello.</p></body></html>")
+    snap_live = dict(snap_dead, pages=[live_page])
+    frag_live = run_acquisition(snap_live)
+    live_fire = {x["check_id"] for x in frag_live["findings"]}
+    expect("ACC-NO-RESPONSE" not in live_fire,
+           "ACC-NO-RESPONSE stays silent when the origin does respond")
+    expect("ACC-NO-ROBOTS" in live_fire,
+           "ACC-NO-ROBOTS still fires on a live origin serving no robots.txt")
+    expect("ACC-NO-SITEMAP" in live_fire,
+           "ACC-NO-SITEMAP still fires on a live origin with no sitemap")
+
+    # -- Small-sample gate --------------------------------------------------
+    # Found by running the live corpus: an ungated audit of a one-page crawl
+    # (a placeholder page, or a site whose bot filter serves the home page and
+    # refuses the rest) produced nine to twelve findings, several `high`, all of
+    # them site-wide absence claims -- "no structured data anywhere", "every
+    # page is a dead end" -- generalised from a single page. A claim about the
+    # site needs a sample big enough to be about the site.
+    print("\nsmall-sample gate:")
+    sys.path.insert(0, os.path.join(ROOT, "lib"))
+    import auditlib as A
+
+    def content_page(url, extra=None):
+        p = {
+            "url": url, "final_url": url, "status": 200,
+            "raw_html": "<html><body><main><h1>Title</h1>"
+                        "<p>Some body copy about the topic.</p></main></body></html>",
+            "text": "Title Some body copy about the topic.",
+            "body_text": "Title Some body copy about the topic.",
+            "headings": [{"level": 1, "text": "Title", "id": None}],
+            "images": [], "meta_robots": None, "headers": {}, "canonical": None,
+            "page_type": "article", "soft_404": False, "internal_links": 1,
+            "outbound_links": [], "jsonld_raw": [], "title": "Title",
+            "redirect_chain": [], "bytes": 900, "elapsed_ms": 80,
+            "viewport": "width=device-width", "h1": ["Title"],
+        }
+        p.update(extra or {})
+        return p
+
+    def snap_with(n):
+        return {
+            "site": "small.example.com", "base_url": "https://small.example.com/",
+            "audited_at": "2026-01-01T00:00:00Z", "site_type": "publisher",
+            "render_mode": "static-only", "render_status": "disabled-by-flag",
+            "robots": {"url": "https://small.example.com/robots.txt",
+                       "present": True, "status": 200, "ai_agents_blocked": [],
+                       "blanket_disallow": False, "sitemaps": []},
+            "sitemap": {"found": True, "url_count": n, "checked": [],
+                        "errors": [], "lastmod": {}},
+            "sitemap_urls": [],
+            "pages": [content_page("https://small.example.com/p%d" % i)
+                      for i in range(n)],
+            "crawl": {"pages_crawled": n, "runtime_seconds": 1.0},
+        }
+
+    def fired_across_skills(snapshot):
+        wd = os.path.join(WORK, "unit-small")
+        if os.path.exists(wd):
+            _sh.rmtree(wd)
+        os.makedirs(wd)
+        with open(os.path.join(wd, "snapshot.json"), "w") as fh:
+            json.dump(snapshot, fh)
+        for sk in ("site-acquisition", "machine-readability", "structured-data",
+                   "answer-extractability", "entity-corroboration",
+                   "freshness-provenance", "engagement-audit"):
+            subprocess.run(
+                [sys.executable,
+                 os.path.join(ROOT, "skills", sk, "scripts", "analyze.py"),
+                 "--workdir", wd], capture_output=True)
+        fired = set()
+        for name in os.listdir(os.path.join(wd, "fragments")):
+            with open(os.path.join(wd, "fragments", name)) as fh:
+                fired |= {x["check_id"] for x in json.load(fh)["findings"]}
+        _sh.rmtree(wd, ignore_errors=True)
+        return fired
+
+    one_page = fired_across_skills(snap_with(1))
+    leaked = sorted(one_page - A.SMALL_SAMPLE_EXEMPT)
+    expect(not leaked,
+           "a one-page crawl asserts no site-wide claim (leaked: %s)" % leaked)
+
+    # The converse must still hold, or the gate is just a mute button: the same
+    # content at a sample the claim can actually be made from still reports.
+    many_page = fired_across_skills(snap_with(8))
+    expect(len(many_page) > len(one_page),
+           "the same content at 8 pages still produces findings (%d vs %d)"
+           % (len(many_page), len(one_page)))
+    expect("SD-ABSENT" in many_page,
+           "SD-ABSENT fires at 8 pages (gate suppresses small samples, not the "
+           "check)")
+
+    # An id misspelt in SMALL_SAMPLE_EXEMPT silently re-gates the check it was
+    # meant to exempt, and nothing else would notice. Tie the list to the source.
+    source_ids = set()
+    id_pat = re.compile(r'\.(?:finding|na|unknown)\(\s*\n?\s*"([A-Z][A-Z0-9-]+)"')
+    for sk in ("site-acquisition", "machine-readability", "structured-data",
+               "answer-extractability", "entity-corroboration",
+               "freshness-provenance", "engagement-audit"):
+        with open(os.path.join(ROOT, "skills", sk, "scripts",
+                               "analyze.py")) as fh:
+            source_ids |= set(id_pat.findall(fh.read()))
+    unknown_ids = sorted(A.SMALL_SAMPLE_EXEMPT - source_ids)
+    expect(not unknown_ids,
+           "every id in SMALL_SAMPLE_EXEMPT exists in the source "
+           "(unknown: %s)" % unknown_ids)
+
+    # -- Link extraction ----------------------------------------------------
+    # Found on a live corpus run: a hand-written blog with 209 anchors on its
+    # home page yielded 0 links, because the extractor required quoted href
+    # values. Unquoted attributes are valid HTML5 and common in hand-written and
+    # generated markup. The failure was invisible in the worst way -- the crawl
+    # ended after the seed page, so every check ran on a one-page sample and the
+    # report looked thin rather than broken.
+    print("\nlink extraction:")
+    sys.path.insert(0, os.path.join(ROOT, "skills", "site-acquisition",
+                                    "scripts"))
+    import crawl as C
+
+    markup = (
+        '<html><body>'
+        '<a href=/unquoted>unquoted</a>'
+        "<a href='/single'>single quoted</a>"
+        '<a href="/double">double quoted</a>'
+        '<a\n  href="/newline-in-tag">split across lines</a>'
+        '<a href="/spaced" >trailing space in tag</a>'
+        '<a href="mailto:x@example.com">mail</a>'
+        '<a href="#frag">fragment</a>'
+        '<a href="javascript:void(0)">js</a>'
+        '<a href="/logo.png">an image, skipped by extension</a>'
+        '<a href="https://other.example.org/x">external</a>'
+        '</body></html>')
+    found = C.links_from(markup, "https://site.example.com/")
+    internal = [u for u in found if C.same_site(u, "https://site.example.com/")]
+
+    expect(any(u.endswith("/unquoted") for u in found),
+           "an unquoted href is extracted (regression: valid HTML5)")
+    expect(any(u.endswith("/single") for u in found)
+           and any(u.endswith("/double") for u in found),
+           "single- and double-quoted hrefs are both extracted")
+    expect(any(u.endswith("/newline-in-tag") for u in found),
+           "an href on a continuation line inside the tag is extracted")
+    # The five internal document links; /logo.png is dropped by extension and
+    # the mailto/fragment/javascript hrefs never become URLs at all.
+    expect(len(internal) == 5,
+           "exactly the 5 internal document links are kept (got %d: %s)"
+           % (len(internal), internal))
+    expect(not any("mailto" in u or "javascript" in u or "#frag" in u
+                   for u in found),
+           "mailto, javascript and fragment hrefs are excluded")
+    expect(not any(u.endswith(".png") for u in found),
+           "non-document extensions are excluded")
+    expect(any("other.example.org" in u for u in found),
+           "external links are still returned (the caller partitions them)")
+
+    # -- D2C false-positive regressions -------------------------------------
+    # All three found by running the live suite over a corpus weighted toward
+    # direct-to-consumer storefronts. Each fired on a pattern that is standard
+    # on commerce sites and that contradicts the check's own stated mechanism.
+    print("\nD2C false-positive regressions:")
+    # Every skill exposes a module named `analyze`, so a plain import would
+    # resolve by sys.path order rather than by which skill is meant. Load each
+    # from its own file path instead.
+    import importlib.util as _ilu
+
+    def load(skill, name):
+        path = os.path.join(ROOT, "skills", skill, "scripts", "analyze.py")
+        spec = _ilu.spec_from_file_location(name, path)
+        mod = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    mr = load("machine-readability", "mr_analyze")
+    en = load("engagement-audit", "en_analyze")
+
+    # (a) Autoplay: the mechanism is unrequested SOUND. Muted autoplay is the
+    # standard hero-video pattern and is a precondition of autoplay working at
+    # all in current browsers. On a live corpus, 17 of 17 autoplaying elements
+    # were muted, so every firing was a false positive.
+    muted_html = ('<video autoplay muted loop playsinline><source src="a.mp4">'
+                  '</video>')
+    muted_reordered = '<video class="hero" muted autoplay playsinline></video>'
+    loud_html = '<video autoplay loop><source src="a.mp4"></video>'
+    loud_audio = '<audio autoplay src="x.mp3"></audio>'
+    expect(en.unmuted_autoplay(muted_html) == [],
+           "muted autoplay video is NOT reported as unrequested sound")
+    expect(en.unmuted_autoplay(muted_reordered) == [],
+           "muted is detected when written before autoplay in the tag")
+    expect(len(en.unmuted_autoplay(loud_html)) == 1,
+           "genuinely unmuted autoplay video IS still reported")
+    expect(len(en.unmuted_autoplay(loud_audio)) == 1,
+           "unmuted autoplay audio IS still reported")
+
+    # (b) Iframes: a tag-manager pixel or chat launcher carries no substance.
+    # 17 of 25 frames that tripped the old check were googletagmanager.com.
+    noise = ["https://www.googletagmanager.com/ns.html?id=GTM-XYZ",
+             "https://widget.intercom.io/frame",
+             "https://cdn.cookielaw.org/banner.html",
+             "https://js.stripe.com/v3/elements-inner-card.html",
+             "about:blank", ""]
+    real = ["https://www.youtube.com/embed/abc123", "/embedded-guide.html"]
+    expect(mr.content_bearing_iframes(noise) == [],
+           "tag-manager, chat, consent and payment frames are not counted as "
+           "trapped content")
+    expect(len(mr.content_bearing_iframes(noise + real)) == 2,
+           "a genuine embed and a same-origin frame ARE still counted")
+
+    # (c) CTA: `body_text` strips <form> and <header>, which is exactly where a
+    # storefront keeps "Add to cart". Matching the full visible text fixes it.
+    store_html = (
+        '<html><body><header><a href="/shop">Shop now</a></header>'
+        '<main><h1>Merino Runner</h1><p>A shoe made from wool.</p></main>'
+        '<form action="/cart/add"><button>Add to cart</button></form>'
+        '</body></html>')
+    expect(en.CTA_RE.search(A.visible_text(store_html)) is not None,
+           "a storefront CTA is found in the full visible text")
+    expect(en.CTA_RE.search(A.main_text(store_html)) is None,
+           "and is genuinely absent from the chrome-stripped body text "
+           "(this is what caused the false positive)")
+
+    # -- Wall-clock budget and error hygiene --------------------------------
+    # Found on the 785-site run: four audits blew the brief's 5-minute ceiling
+    # because the budget was checked only *between* fetches, so a crawl could
+    # pass the check at 179s and then spend another 38s on one request's
+    # timeout-and-retry tail. And ACC-NO-RESPONSE evidence read "ConnectionError:
+    # None", because several urllib3 exceptions stringify to "None".
+    print("\nwall-clock budget and error hygiene:")
+    import time as _t
+
+    now = _t.time()
+    # Plenty of time left: full timeout, full retries.
+    to, rt = C.budgeted(now + 600)
+    expect(to == C.DEFAULT_TIMEOUT and rt == C.FETCH_RETRIES,
+           "a fetch with ample budget keeps its full timeout and retries")
+    # Some time left, but not enough for the retry tail: retries drop first.
+    to, rt = C.budgeted(now + 20, timeout=12, retries=2)
+    expect(to == 12 and rt < 2,
+           "retries are dropped before the timeout when the budget is tight "
+           "(got timeout=%s retries=%s)" % (to, rt))
+    # Less than one timeout left: the timeout itself shrinks to fit.
+    to, rt = C.budgeted(now + 3, timeout=12, retries=2)
+    expect(to <= 3.01 and rt == 0,
+           "the timeout shrinks to the time remaining (got %s, %s)" % (to, rt))
+    # Budget already gone: return immediately rather than starting a long wait.
+    to, rt = C.budgeted(now - 5, timeout=12, retries=2)
+    expect(to <= 0.5 and rt == 0,
+           "an exhausted budget yields a near-zero timeout and no retries")
+
+    class _Silent(Exception):
+        def __str__(self):
+            return "None"
+
+    expect(C.describe_exception(_Silent()) == "_Silent",
+           "an exception stringifying to 'None' is reported by type alone")
+    expect(C.describe_exception(None) == "no response",
+           "a missing exception reads as 'no response', not 'None'")
+    expect("None" not in C.describe_exception(ValueError("")),
+           "an empty exception message never renders as literal None")
+    long_exc = C.describe_exception(ValueError("x" * 900))
+    expect(len(long_exc) < 340,
+           "an overlong transport error is truncated for the reader (%d chars)"
+           % len(long_exc))
+
+    # -- Storefront page-type classification --------------------------------
+    # Found on the D2C corpus: /collections/ pages were classified `product`,
+    # because a Shopify grid shows a price per tile and a quick-add control on
+    # every tile, and the content heuristic read that as a product detail page.
+    # The structured-data check then reported "no Product schema" on a listing,
+    # which correctly has none -- a listing of forty items is an ItemList. As
+    # /collections/ is the Shopify default path, this hit a large share of the
+    # exact sites this audit is most often pointed at.
+    print("\nstorefront page-type classification:")
+    sys.path.insert(0, os.path.join(ROOT, "skills", "site-acquisition",
+                                    "scripts"))
+    from classify import classify_page
+
+    def store_page(url, text, links, h2s):
+        return {
+            "url": url, "final_url": url, "status": 200,
+            "raw_html": "<html></html>", "text": text, "body_text": text,
+            "headings": [{"level": 2, "text": "S%d" % i, "id": None}
+                         for i in range(h2s)],
+            "internal_links": links, "images": [], "headers": {},
+            "jsonld_raw": [], "title": "t",
+        }
+
+    grid_text = ("Add to cart $49.00 Add to cart $59.00 Add to cart $79.00 "
+                 "Add to cart $89.00 Sort by Filter")
+    detail_text = ("The Pac Kit is a cabin suitcase. $199.00 Add to cart. "
+                   "Free shipping and a five year warranty.")
+    base = "https://shop.example.com/"
+
+    expect(classify_page(store_page("https://shop.example.com/collections/all",
+                                    grid_text, 60, 2), base) == "category",
+           "a /collections/ grid with quick-add tiles is a category page")
+    expect(classify_page(store_page("https://shop.example.com/collections/sale",
+                                    grid_text, 35, 8), base) == "category",
+           "a /collections/ page stays a category even with cart controls")
+    expect(classify_page(store_page("https://shop.example.com/products/pac-kit",
+                                    detail_text, 18, 3), base) == "product",
+           "a /products/ detail page is still classified product")
+    expect(classify_page(store_page("https://shop.example.com/products/index",
+                                    grid_text.replace("Add to cart", "From"),
+                                    60, 2), base) == "category",
+           "a /products/ URL that is really a dense listing is a category")
 
     # -- Summary ------------------------------------------------------------
     passed = sum(1 for ok, _ in RESULTS if ok)

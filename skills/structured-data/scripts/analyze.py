@@ -129,7 +129,7 @@ def types_of(node):
 
 def run(workdir):
     snap = A.load_snapshot(workdir)
-    f = A.Fragment(SKILL)
+    f = A.Fragment(SKILL, snapshot=snap)
     pages = A.ok_pages(snap)
 
     if not pages:

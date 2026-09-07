@@ -30,15 +30,44 @@ INTERRUPT_RE = re.compile(
 SEARCH_RE = re.compile(
     r'(?is)<input[^>]*type\s*=\s*["\']search["\']|role\s*=\s*["\']search["\']|'
     r'name\s*=\s*["\']q["\']|placeholder\s*=\s*["\'][^"\']*search')
-AUTOPLAY_RE = re.compile(r"(?is)<(?:video|audio)[^>]*\bautoplay\b")
+# Capture the WHOLE opening tag, not just up to the `autoplay` token, so
+# attributes written after it are visible. Matching only as far as `autoplay`
+# made `muted` invisible, and every autoplaying element then looked like
+# unrequested sound.
+MEDIA_TAG_RE = re.compile(r"(?is)<(?:video|audio)\b([^>]*)>")
+_ATTR = lambda name: re.compile(r"\b%s\b" % name, re.I)
 
 HEAVY_BYTES = 2_500_000
 SLOW_MS = 2500
 
 
+def unmuted_autoplay(html):
+    """Media that autoplays *with sound*. Returns the offending tags.
+
+    The mechanism this check exists for is unrequested SOUND on arrival. A
+    muted autoplaying video is not that: it is the standard hero-video pattern,
+    and it is muted because every current browser refuses to autoplay anything
+    else -- `muted` is a precondition of autoplay working at all, not a nicety.
+    Flagging it reported a defect that cannot occur as described.
+
+    Measured over a D2C corpus: 17 of 17 autoplaying elements were muted, so
+    every firing of this check was a false positive. Narrowing it to genuinely
+    unmuted media keeps the real finding -- which does still exist, and is
+    severe when it does -- and removes the noise.
+    """
+    out = []
+    for attrs in MEDIA_TAG_RE.findall(html or ""):
+        if not _ATTR("autoplay").search(attrs):
+            continue
+        if _ATTR("muted").search(attrs):
+            continue
+        out.append(attrs)
+    return out
+
+
 def run(workdir):
     snap = A.load_snapshot(workdir)
-    f = A.Fragment(SKILL)
+    f = A.Fragment(SKILL, snapshot=snap)
     pages = A.ok_pages(snap)
 
     if not pages:
@@ -223,8 +252,16 @@ def run(workdir):
     convertible = [p for p in landing
                    if p.get("page_type") in ("home", "product", "contact", "about")]
     if convertible:
+        # Match against the full visible text, not the chrome-stripped body.
+        # `body_text` removes <form>, <header> and <nav>, which is precisely
+        # where a storefront keeps "Add to cart", "Shop now" and "Contact us".
+        # Measured across a D2C corpus, the chrome-stripped text missed a CTA
+        # that was plainly on the page for roughly half of all commerce sites --
+        # the single largest false-positive source in the engagement half. The
+        # mechanism asks whether the visitor is offered a next step *on the
+        # page*; a button in the header is on the page.
         no_cta = [p for p in convertible
-                  if not CTA_RE.search(p.get("body_text") or "")]
+                  if not CTA_RE.search(p.get("text") or "")]
         if no_cta:
             f.finding(
                 "EN-NO-CTA",
@@ -256,27 +293,45 @@ def run(workdir):
         f.na("EN-NO-CTA", "No conversion-relevant page types detected.")
 
     # -- 6. Arrival interruptions -------------------------------------------
-    autoplay = [p for p in pages if AUTOPLAY_RE.search(p.get("raw_html") or "")]
+    autoplay = [p for p in pages if unmuted_autoplay(p.get("raw_html") or "")]
+    muted_only = [p for p in pages
+                  if not unmuted_autoplay(p.get("raw_html") or "")
+                  and MEDIA_TAG_RE.search(p.get("raw_html") or "")
+                  and _ATTR("autoplay").search(p.get("raw_html") or "")]
     if autoplay:
         f.finding(
             "EN-AUTOPLAY-MEDIA",
-            "Pages autoplay video or audio on arrival",
+            "Pages autoplay video or audio with sound on arrival",
             "engagement",
-            "Unrequested sound or motion on arrival is among the most reliable "
-            "causes of an immediate back-navigation, particularly on mobile "
-            "where the visitor may be in company.",
-            A.ratio_evidence("HTML pages", len(autoplay), len(pages)),
+            "Unrequested sound on arrival is among the most reliable causes of "
+            "an immediate back-navigation, particularly on mobile where the "
+            "visitor may be in company and cannot silence it quickly.",
+            A.ratio_evidence("HTML pages", len(autoplay), len(pages),
+                             "Media autoplays without a `muted` attribute."),
             impact="degrading", affected=len(autoplay), sampled=len(pages),
             affected_urls=[p["final_url"] for p in autoplay],
             action={
-                "summary": "Remove autoplay, or mute it and require a click.",
+                "summary": "Mute autoplaying media, or require a click to play.",
                 "effort": "low",
-                "steps": ["Drop the autoplay attribute.",
-                          "If motion is needed for design, keep it muted and "
-                          "respect prefers-reduced-motion."],
+                "steps": ["Add `muted` to any element that must autoplay; "
+                          "browsers require it in any case, so unmuted autoplay "
+                          "often fails silently and inconsistently.",
+                          "Prefer a click-to-play poster frame where the audio "
+                          "carries meaning.",
+                          "Respect prefers-reduced-motion for decorative video."],
                 "expected_impact": "Removes a common immediate-bounce trigger.",
-                "verification": "No autoplay attributes remain.",
+                "verification": "No <video> or <audio> element carries autoplay "
+                                "without muted.",
             })
+    elif muted_only:
+        # Say this out loud rather than staying silent. Muted autoplay is what
+        # the check used to fire on, and recording it shows the check ran, saw
+        # the media, and correctly judged it not to be the defect.
+        f.na("EN-AUTOPLAY-MEDIA",
+             "Autoplaying media found on %d page(s), all muted. Muted autoplay "
+             "is the standard hero-video pattern and carries no unrequested "
+             "sound, so it is not reported as a bounce trigger."
+             % len(muted_only))
     else:
         f.na("EN-AUTOPLAY-MEDIA", "No autoplaying media detected.")
 

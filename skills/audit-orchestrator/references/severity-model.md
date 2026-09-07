@@ -41,6 +41,31 @@ outrank a directly observed one.
 high-importance finding at full prevalence jumped two levels and everything
 collected at the top of the scale.
 
+## Before severity: is the claim sayable at all?
+
+Severity grades a finding that has already earned the right to exist. A
+separate, earlier gate decides whether it has.
+
+A check phrased as a site-wide absence — "no structured data anywhere", "every
+page is a dead end" — needs a sample it can honestly generalise from. Below
+`MIN_SITE_CLAIM_SAMPLE` (3) content pages it is recorded as `inconclusive`
+instead of asserted, because at n=1 the sentence has the grammar of a site-wide
+defect and the evidence of one page. The gate is applied once, in
+`lib/auditlib.py`, for the same reason severity is computed once here.
+
+Two kinds of check are exempt, both listed with their reason in
+`SMALL_SAMPLE_EXEMPT`: claims about the **origin** rather than a page sample
+(robots.txt, the sitemap, whether the host answered at all), and defects
+**directly observed** on a named page (this JSON-LD block does not parse).
+Neither generalises from a sample, so both are as true at one page as at a
+hundred, and gating them would trade a false positive for a miss.
+
+Note that the gate keys off the *crawl's* content-page count, not the finding's
+own `affected/sampled` pair. Those denominators are not comparable — some count
+pages, some count images or headings, and site-level checks use 1/1 to mean
+"one site". Gating on them would read that 1/1 as a one-page crawl and silently
+disable every site-level check at any crawl size.
+
 ## The critical rule
 
 `critical` is reserved for `blocking` impact. Nothing that degrades or

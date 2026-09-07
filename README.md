@@ -35,6 +35,17 @@ a false positive on a blog post. Skipped checks are recorded in
 to stay silent. This is the main lever on both false positives and
 generalisation to unseen sites.
 
+The same principle applies to the *size* of the evidence, not only its type. A
+check phrased as a site-wide absence — "no structured data anywhere", "every
+page is a dead end" — is only as good as its denominator, so below three
+content pages it records `inconclusive` instead of asserting. Small crawls are
+common and legitimate: a bot filter serves the home page and refuses the rest,
+or the site really is tiny. Two kinds of check are exempt and say why in
+`lib/auditlib.py`: claims about the *origin* (robots.txt, the sitemap, whether
+the host answered), and defects *directly observed* on a named page. Both are
+as true at one page as at a hundred, so gating them would trade a false
+positive for a miss.
+
 **Mechanism-first findings.** Every finding carries a `mechanism` field
 stating *why* the defect breaks retrieval or engagement, not merely that
 something is missing. A fix that is not traceable to a mechanism is a guess.
@@ -47,7 +58,11 @@ per-type quota caps how many pages of each type are kept — tighter for
 low-value boilerplate — and a URL whose type is already saturated is skipped
 before it is fetched. Redirect targets are de-duplicated by final URL so one
 page reached under several aliases is never counted twice in a prevalence
-ratio. Home detection survives locale redirects (`/` → `/in`, `/en-us`). See
+ratio. Home detection survives locale redirects (`/` → `/in`, `/en-us`). Links
+are extracted with a parser rather than a pattern, so unquoted attributes
+(`<a href=/foo>`, valid HTML5) and markup split across lines still yield a
+frontier — a regex here fails silently, ending the crawl at the seed page and
+leaving a report that looks thin rather than broken. See
 `skills/site-acquisition/references/classification.md`.
 
 **Determinism is a property of the analysis, not a hope.** The audit is a pure
@@ -172,6 +187,91 @@ python3 skills/audit-orchestrator/scripts/run_audit.py \
   --url http://127.0.0.1:8899/ --workdir /tmp/bad --no-render
 ```
 
+### Generalisation: the live corpus suite
+
+Fixtures prove the checks are *correct* against ground truth we control. They
+cannot prove the checks *generalise*, because a fixture is by definition a site
+we designed. That is what `tests/live_suite.py` is for:
+
+```bash
+python3 tests/live_suite.py                 # the full corpus
+python3 tests/live_suite.py --limit 8       # smoke run
+```
+
+It audits a corpus of real sites — `tests/corpus.txt`, spanning documentation,
+SaaS, publishers, ecommerce, nonprofit, plain-HTML blogs and deliberately
+awkward markup — and asserts twelve invariants that must hold on *any* site,
+none of which reference any site's content. Among them: a schema-valid report
+is produced; the audit finishes inside the brief's five-minute budget; no
+analyser crashed; **every `affected_url` was actually fetched**, so no finding
+can cite a page that was never seen; `critical` is reserved for the
+pipeline-breaking blockers; and no unrendered format placeholder reaches
+reader-facing text. Nothing is fitted to the corpus, so sites can be swapped
+freely.
+
+Its second output is the one no single-site run can produce: a **firing rate
+per check across the corpus**. A check that fires on nearly every site is a
+detection defect either way — if the finding is real everywhere it is not
+diagnostic, and if it is not, it is a false positive with wide reach. A check
+that never fires anywhere is untested surface area. Both lists are printed and
+written to `SUMMARY.md`.
+
+That is not a hypothetical. Every defect in the list below was found by running
+the suite, and every fixture passed at the time each was found:
+
+| Found | Defect |
+|---|---|
+| Small-sample claims | A one-page crawl asserted 9–12 site-wide findings, several `high`, from a single page of evidence |
+| Link extraction | A regex requiring quoted `href` returned zero links for valid-HTML5 unquoted attributes, silently capping those sites at one page |
+| Unreachable hosts | A dead origin was reported as "no robots.txt" + "no sitemap" — asserting facts about markup never seen |
+| `EN-NO-CTA` | Matched chrome-stripped text, so it missed "Add to cart" inside `<form>`; fired on ~half of all storefronts |
+| `EN-AUTOPLAY-MEDIA` | Fired on muted autoplay. 17 of 17 autoplaying elements in the corpus were muted, so every firing contradicted the check's own "unrequested sound" mechanism |
+| `MR-IFRAME-CONTENT` | 17 of 25 frames that tripped it were `googletagmanager.com`; the check was measuring "has analytics", not trapped content |
+| `AE-NO-DEFINITION` | Asserted "no definition" on pages too text-sparse to read, restating a readability defect as a content one |
+| Wall-clock budget | Checked only between fetches, so one request's retry tail could push an audit past the 5-minute ceiling |
+| Evidence hygiene | `ACC-NO-RESPONSE` rendered "ConnectionError: None" — a Python artefact shown to a reader |
+
+The last four came specifically from the D2C corpus, and they are the reason it
+exists: muted hero video, tag-manager iframes, form-wrapped cart buttons and
+client-rendered storefronts are all but universal on commerce sites and all but
+absent from the documentation and publisher sites a general corpus is made of.
+
+Two corpora ship. `tests/corpus.txt` is a compact mixed set for quick runs.
+`tests/corpus-d2c.txt` is a ~900-entry set weighted toward direct-to-consumer
+brands — the site shape this audit is most often pointed at, and where product
+schema, faceted navigation, JS storefronts, review widgets and consent banners
+all interact — grouped by segment so the firing-rate table can be read per
+segment. A check that fires on every storefront and no documentation site is
+measuring page type, not defect, and only a control group shows that.
+
+Candidate lists go stale as brands fold and rebrand, and a dead host costs the
+suite three retries before it learns anything. Probe first:
+
+```bash
+python3 tests/probe_corpus.py --in  tests/corpus-d2c.txt \
+                              --out tests/corpus-d2c.live.txt
+python3 tests/live_suite.py --corpus tests/corpus-d2c.live.txt \
+                            --workers 20 --max-pages 10
+```
+
+### Brief compliance
+
+```bash
+python3 tests/check_compliance.py
+```
+
+The rubric has two halves. One is judgement — are the checks right, are the
+fixes mechanism-sound — and no script can score that. The other is mechanical:
+exactly one entrypoint, every skill folder agentskills.io compliant with the
+brief's named sections, the report schema floor, recommend-only, inside the
+size and runtime budgets. Those are checked rather than eyeballed.
+
+The recommend-only guarantee in particular is *verified from source* rather
+than asserted: the checker walks the AST of every shipped script and fails on
+any `post`/`put`/`delete`/`patch` call, any shell escape, and any use of
+`subprocess` outside the orchestrator. `make_submission.py` runs this check and
+refuses to build a zip that fails it.
+
 ---
 
 ## Layout
@@ -186,7 +286,21 @@ skills/<skill>/
   scripts/                executable checks
   references/             detailed models and checklists
 tests/fixtures/           broken and clean sites
+tests/run_tests.py        fixture suite: are the checks correct?
+tests/live_suite.py       live corpus suite: do they generalise?
+tests/check_compliance.py brief-compliance gate: is the package well-formed?
+tests/probe_corpus.py     corpus maintenance: which candidate hosts still answer
+tests/corpus.txt          the mixed corpus, one URL per line
+tests/corpus-d2c.txt      ~900 D2C-weighted candidates, grouped by segment
+make_submission.py        builds and verifies the submission zip
 ```
+
+`make_submission.py` writes the zip and then re-opens it to check it against
+`marketplace.json`: every listed skill ships a `SKILL.md`, every shipped
+`SKILL.md` is listed, each has YAML frontmatter whose `name` matches its
+manifest id, exactly one skill is the entrypoint, and the archive is inside the
+size limit. A rename that updated the folder but not the manifest fails the
+build rather than reaching a grader.
 
 `lib/auditlib.py` is a marketplace-level shared module. Duplicating it into
 eight skill folders would be worse engineering than the small coupling it

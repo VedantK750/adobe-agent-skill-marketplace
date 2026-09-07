@@ -189,8 +189,13 @@ def main():
                 "--workdir", args.workdir, "--out", out], "compose"):
         sys.exit(1)
 
-    run([py, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          "validate_report.py"), "--report", out], "validate")
+    # Validation is a gate, not a log line. The report is still written -- it is
+    # the artefact a human needs in order to see what went wrong -- but the exit
+    # code has to carry the failure, or a caller that only checks the return
+    # value ships an invalid report believing it passed.
+    valid = run([py, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "validate_report.py"), "--report", out],
+                "validate")
 
     if args.markdown:
         with open(out, "r", encoding="utf-8") as fh:
@@ -202,6 +207,14 @@ def main():
 
     sys.stderr.write("[pipeline] total %.1fs\n" % (time.time() - started))
     print(out)
+
+    if not valid:
+        sys.stderr.write(
+            "[pipeline] the report at %s FAILED schema validation. It has been "
+            "written so the problem can be inspected, but it must not be "
+            "presented as an audit result until the offending fragment is "
+            "fixed and the report recomposed.\n" % out)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

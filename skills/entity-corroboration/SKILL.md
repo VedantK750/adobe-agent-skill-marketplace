@@ -11,6 +11,13 @@ allowed-tools: [Bash, Read, Write, WebSearch]
 After `site-acquisition`. The on-site half reads `snapshot.json` only. The
 off-site half needs a search capability.
 
+## Inputs
+- `--workdir DIR` (required) — a directory holding `snapshot.json`.
+- `AUDIT_SEARCH_RESULTS` (optional, environment) — path to a JSON file of the
+  form `{"urls": [...]}`, holding third-party URLs that genuinely refer to
+  this brand. Supplying it turns the two search-dependent checks from
+  `inconclusive` into real results. Without it they stay `inconclusive`.
+
 ## The mechanism
 Two ideas from the background material. A fact repeated consistently across
 unrelated sources is treated as far more reliable than one that lives in a
@@ -34,7 +41,9 @@ clearly distinguishes them, so facts get attributed to the wrong organisation.
 - `EC-NAME-COLLISION` — other entities sharing the name, with no
   disambiguating category or location on the site. **Requires search.**
 
-## Two-phase procedure
+## Procedure
+Two phases, because half of this concern is by definition off-site.
+
 1. Run `scripts/analyze.py --workdir DIR`. It performs the on-site checks
    deterministically and writes `corroboration_targets.json`: the brand's
    canonical claims plus a query worklist.
@@ -54,8 +63,9 @@ claim of corroboration is a worse failure than an honest gap.
 Count distinct domains, not mentions. Press releases syndicated across many
 sites are one source, not many. Domains the brand controls do not count.
 
-## Run
-`python3 scripts/analyze.py --workdir DIR`
+Run: `python3 scripts/analyze.py --workdir DIR`
 
 ## Output
-`fragments/entity-corroboration.json` and `corroboration_targets.json`.
+`fragments/entity-corroboration.json` — findings, `not_applicable` and
+`inconclusive` records for the orchestrator to compose — plus
+`corroboration_targets.json`, the search worklist phase 2 completes.
