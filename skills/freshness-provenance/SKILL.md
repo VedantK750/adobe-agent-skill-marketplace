@@ -10,6 +10,12 @@ allowed-tools: [Bash, Read, Write]
 ## When to use
 After `site-acquisition`. Reads `snapshot.json`; never touches the network.
 
+## Inputs
+- `--workdir DIR` (required) — a directory holding `snapshot.json`.
+  No other input. The skill is a pure function of that file, including its
+  notion of "now": the audit timestamp in the snapshot, not the wall clock,
+  so a re-run over a stored snapshot reproduces exactly.
+
 ## The mechanism
 Recency and attribution are among the few quality signals available without
 reading the content. An undated page cannot be preferred over an older
@@ -36,8 +42,23 @@ Date checks run only on `article` and `documentation` page types; a contact
 page needs no publication date. Copyright and year checks allow a one-year
 grace period. Uniform-lastmod requires more than eight entries before firing.
 
-## Run
-`python3 scripts/analyze.py --workdir DIR`
+## Procedure
+1. Load `snapshot.json` and take the `article` and `documentation` pages —
+   the types for which a publication date is meaningful at all.
+2. Extract dates from JSON-LD (`datePublished`, `dateModified`), `<time>`
+   elements and meta tags, and record pages carrying none.
+3. Scan body text for time-sensitive assertions — prices, plans, hours,
+   version numbers — and check whether a date accompanies them.
+4. Read footer copyright years and heading years, allowing a one-year grace
+   period, and treat a year *range* or the presence of the current year
+   anywhere on the page as current rather than stale.
+5. Compare sitemap `lastmod` values across entries; a single shared value over
+   more than eight entries reflects the build, not the content.
+6. Check articles for an author in markup or byline.
+7. Write the fragment with impact classes, not severities.
+
+Run: `python3 scripts/analyze.py --workdir DIR`
 
 ## Output
-`fragments/freshness-provenance.json`.
+`fragments/freshness-provenance.json` — findings, `not_applicable` and
+`inconclusive` records for the orchestrator to compose.

@@ -26,6 +26,75 @@ SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
 # gating (e.g. product coverage) set their own floors.
 MIN_SAMPLE = 4
 
+# The smallest sample a claim *about the site* may generalise from.
+#
+# Most checks are phrased as site-wide absences -- "no structured data
+# anywhere", "pages declare no main landmark", "every page is a dead end". Such
+# a claim is only as good as its denominator, and below three pages there is no
+# "anywhere": the sentence has the grammar of a site-wide defect but the
+# evidence of a single page.
+#
+# Small crawls are common and legitimate -- a bot filter serves the home page
+# and refuses the rest, a sitemap is unreadable, or the site really is tiny --
+# which is precisely why the floor is needed rather than assumed away. Measured
+# on a 43-site live corpus, an ungated run turned one-page crawls of a
+# placeholder page and of a plain-HTML blog into nine and ten findings
+# respectively, three of them `high`, none supported by what was observed.
+#
+# Exempt checks are listed in SMALL_SAMPLE_EXEMPT below.
+MIN_SITE_CLAIM_SAMPLE = 3
+
+# Checks the floor does not apply to. Kept as one list, in one place, for the
+# same reason severity is computed once in the orchestrator: a policy applied
+# per call site drifts, and the next check added silently inherits whatever the
+# author happened to think that day. A reviewer can read the entire exemption
+# policy here in one screen.
+#
+# A check earns an exemption by being one of exactly two things.
+SMALL_SAMPLE_EXEMPT = {
+    # 1. ORIGIN-LEVEL -- a property of the host, or of one file at one
+    #    well-known path. How many pages we went on to sample has no bearing on
+    #    whether robots.txt carries a Disallow, or whether the host answered at
+    #    all. Several of these are also the *reason* the sample is small, so
+    #    gating them would suppress precisely the finding that explains the run.
+    "ACC-NO-RESPONSE",
+    "ACC-AI-CRAWLER-BLOCKED",
+    "ACC-BLANKET-DISALLOW",
+    "ACC-NO-ROBOTS",
+    "ACC-NO-SITEMAP",
+    "ACC-SITEMAP-NOT-ENUMERABLE",
+    "FP-LASTMOD-UNIFORM",
+    "EC-SINGLE-SOURCE-CLAIMS",
+
+    # 2. DIRECTLY OBSERVED -- the defect was seen in a specific page's own
+    #    markup, headers or response, and the finding names that page. "This
+    #    JSON-LD block does not parse" is a fact about the block, not an
+    #    inference about the site, so it is as true at n=1 as at n=100. Gating
+    #    these would trade a false positive for a miss, which is not a trade the
+    #    rubric rewards.
+    "ACC-BROKEN-PAGES",
+    "ACC-REDIRECT-CHAINS",
+    "ACC-SNIPPET-SUPPRESSED",
+    "MR-RENDER-GAP",
+    "MR-EMPTY-SHELL",
+    "MR-FACTS-IN-IMAGES",
+    "MR-MULTI-H1",
+    "MR-IFRAME-CONTENT",
+    "SD-INVALID-JSON",
+    "SD-INCOMPLETE-PROPS",
+    "SD-TEXT-CONFLICT",
+    "AE-THIN-CONTENT",
+    "AE-DUPLICATE-TITLES",
+    "EN-HEAVY-PAGES",
+    "EN-SLOW-RESPONSE",
+    "EN-AUTOPLAY-MEDIA",
+    "EN-INTERRUPTIONS",
+    "EN-CONSENT-BLOCKS-CONTENT",
+    "FP-STALE-COPYRIGHT",
+    "FP-STALE-YEAR-HEADINGS",
+    "EC-INCONSISTENT-SELF-DESCRIPTION",
+}
+
 BOILERPLATE_TAGS = ["script", "style", "noscript", "template", "svg", "iframe"]
 CHROME_TAGS = ["nav", "header", "footer", "aside", "form"]
 
@@ -98,15 +167,24 @@ class Fragment:
     that stayed silent on purpose from one that simply missed something.
     """
 
-    def __init__(self, skill_id):
+    def __init__(self, skill_id, snapshot=None):
         self.skill_id = skill_id
         self.findings = []
         self.not_applicable = []
         self.inconclusive = []
+        # How many content pages this run actually observed. The small-sample
+        # gate keys off this rather than off each finding's own prevalence
+        # denominator, because those denominators are not comparable: some
+        # checks count pages, some count images or headings, and site-level
+        # checks use 1/1 to mean "one site" rather than "one page". Gating on
+        # the finding's own `sampled` would read that 1/1 as a one-page crawl
+        # and silently disable every site-level check at any crawl size.
+        self.pages_sampled = None if snapshot is None else len(ok_pages(snapshot))
 
     def finding(self, check_id, title, category, mechanism, evidence,
                 impact, affected=0, sampled=0, page_importance="normal",
-                confidence="high", affected_urls=None, action=None):
+                confidence="high", affected_urls=None, action=None,
+                min_sample=None):
         """Record a defect.
 
         `impact` is the mechanism impact class, one of:
@@ -115,7 +193,40 @@ class Fragment:
           weakening - a trust or quality signal is absent
         Final severity is computed centrally by the orchestrator from
         impact x prevalence x page importance, then adjusted for confidence.
+
+        A finding whose sample is below MIN_SITE_CLAIM_SAMPLE is recorded as
+        `inconclusive` instead of asserted: a site-wide claim drawn from one
+        page is not evidence, it is a guess wearing the grammar of a defect.
+        Checks in SMALL_SAMPLE_EXEMPT are not gated; `min_sample` overrides both
+        for a check that needs its own floor.
+
+        The gate lives here, once, for the same reason severity is computed once
+        in the orchestrator: applied per check it would drift, and a check added
+        later would silently miss it.
         """
+        if min_sample is not None:
+            floor = min_sample
+        elif check_id in SMALL_SAMPLE_EXEMPT:
+            # No floor at all, not a floor of one: an origin that answered
+            # nothing has zero content pages, and ACC-NO-RESPONSE is exactly the
+            # finding that has to survive that. Directly-observed checks are
+            # safe at zero too -- they only fire on something they saw.
+            floor = 0
+        else:
+            floor = MIN_SITE_CLAIM_SAMPLE
+
+        # Fall back to the finding's own denominator only when the fragment was
+        # built without a snapshot (unit tests construct one directly).
+        observed = self.pages_sampled if self.pages_sampled is not None else sampled
+        if observed < floor:
+            self.unknown(
+                check_id,
+                "Only %d content page(s) were retrieved. This check states a "
+                "property of the site as a whole, which needs at least %d to "
+                "distinguish from a property of a single page; not asserted on "
+                "this evidence." % (observed, floor))
+            return
+
         self.findings.append({
             "check_id": check_id,
             "skill": self.skill_id,
@@ -218,6 +329,14 @@ def pct(part, whole):
     if not whole:
         return 0.0
     return round(100.0 * part / float(whole), 1)
+
+
+def plural(n, singular, plural_form=None):
+    """"1 page" / "2 pages". Evidence is read by non-experts, and "1 headings
+    across 1 pages" reads as a machine talking to itself, which costs the
+    finding credibility it has otherwise earned."""
+    word = singular if n == 1 else (plural_form or singular + "s")
+    return "%d %s" % (n, word)
 
 
 def ratio_evidence(noun, affected, sampled, detail=""):

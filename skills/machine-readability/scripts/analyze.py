@@ -9,6 +9,7 @@ only exist for a human looking at a rendered screen?
 import os
 import re
 import sys
+import urllib.parse as up
 
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "lib"))
@@ -37,9 +38,54 @@ def render_gap(page):
     return (rendered - raw) / float(rendered)
 
 
+# Iframe hosts that never carry page substance: analytics and tag managers,
+# ad and conversion pixels, chat and support launchers, consent managers, and
+# payment field frames. Matched on the host, so a subdomain of any of these is
+# covered. The list is deliberately about *categories of infrastructure* rather
+# than named vendors wherever possible, and adding a vendor to it is a
+# statement that the frame carries no reader-facing content.
+NON_CONTENT_IFRAME_HOSTS = re.compile(
+    r"(?i)(?:^|\.)(?:"
+    r"googletagmanager\.com|google-analytics\.com|analytics\.google\.com|"
+    r"doubleclick\.net|googlesyndication\.com|googleadservices\.com|"
+    r"facebook\.com|facebook\.net|connect\.facebook\.net|"
+    r"hotjar\.com|clarity\.ms|mouseflow\.com|fullstory\.com|"
+    r"intercom\.io|intercomcdn\.com|drift\.com|zendesk\.com|zdassets\.com|"
+    r"crisp\.chat|tawk\.to|livechatinc\.com|freshchat\.com|tidio\.co|"
+    r"onetrust\.com|cookielaw\.org|trustarc\.com|usercentrics\.eu|"
+    r"cookiebot\.com|termly\.io|"
+    r"recaptcha\.net|gstatic\.com|hcaptcha\.com|"
+    r"stripe\.com|stripe\.network|paypal\.com|braintreegateway\.com|"
+    r"klaviyo\.com|attentivemobile\.com|listrak\.com|"
+    r"snapchat\.com|tiktok\.com|bing\.com|clarity\.microsoft\.com"
+    r")$")
+
+
+def content_bearing_iframes(srcs):
+    """Frames that could actually hold substance a reader would want.
+
+    Everything else on the page -- pixels, chat launchers, consent managers,
+    payment fields -- is infrastructure. Counting it turned this check into a
+    detector for "uses analytics", which is not a discoverability defect.
+    """
+    out = []
+    for src in srcs:
+        src = (src or "").strip()
+        if not src or src.startswith(("about:", "javascript:", "data:")):
+            continue
+        host = up.urlparse(src).netloc.lower()
+        # A relative or same-origin frame is still worth counting: it is the
+        # site's own document, and its text genuinely does not belong to the
+        # parent page.
+        if host and NON_CONTENT_IFRAME_HOSTS.search(host):
+            continue
+        out.append(src)
+    return out
+
+
 def run(workdir):
     snap = A.load_snapshot(workdir)
-    f = A.Fragment(SKILL)
+    f = A.Fragment(SKILL, snapshot=snap)
     pages = A.ok_pages(snap)
 
     if not pages:
@@ -313,8 +359,16 @@ def run(workdir):
         f.na("MR-NO-MAIN-LANDMARK", "Main landmark present on most pages.")
 
     # -- 7. Content trapped in iframes --------------------------------------
+    # Only frames that could plausibly carry content count. The overwhelming
+    # majority of iframes on a modern commercial page are invisible
+    # infrastructure -- a tag-manager noscript pixel, a chat launcher, a consent
+    # manager, a payment field -- and none of them holds substance a reader or
+    # an extractor is missing. Measured on a live corpus, 17 of 25 frames that
+    # tripped this check were googletagmanager.com and the rest were a support
+    # chat widget: every firing was a false positive, and the check was really
+    # measuring "has analytics" against "is text-sparse".
     heavy_iframe = [p for p in pages
-                    if len(p.get("iframes") or []) > 0
+                    if content_bearing_iframes(p.get("iframes") or [])
                     and A.word_count(p.get("body_text") or "") < 150]
     if heavy_iframe:
         f.finding(

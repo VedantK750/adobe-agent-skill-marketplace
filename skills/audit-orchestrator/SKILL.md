@@ -53,8 +53,12 @@ areas are never touched, and every URL is fetched exactly once.
    share a root cause, assigns `F-NNN` ids in deterministic order, and appends
    the proactive recommendations.
 
-5. **Validate.** Run `scripts/validate_report.py`. Do not emit a report that
+5. **Validate.** Run `scripts/validate_report.py`. Do not present a report that
    fails validation; fix the fragment that caused it and recompose.
+   `run_audit.py` enforces this: on a validation failure it still writes the
+   report — that is the artefact needed to diagnose the problem — but exits
+   with status 2, so a caller checking only the return code cannot ship an
+   invalid report believing it passed.
 
 6. **Present.** Emit the JSON report. Add `--markdown` for a human-readable
    version. Lead with the critical and high findings and their fixes.
@@ -92,6 +96,15 @@ from one that missed something. Never delete them to make a report look cleaner.
 
 ## Interpreting severity
 `critical` is reserved for defects that break the retrieval pipeline outright:
-the crawler is refused entry, or the content is unreadable once inside.
-Everything that degrades or weakens a signal caps at `high`, however
-widespread. See `references/severity-model.md`.
+the origin does not answer, the crawler is refused entry, or the content is
+unreadable once inside. Everything that degrades or weakens a signal caps at
+`high`, however widespread. See `references/severity-model.md`.
+
+## When the sample is small
+A crawl that returns only a page or two is common and legitimate — a bot filter
+serves the home page and refuses the rest, or the site really is that small.
+Checks that state a property of the whole site do not assert on that evidence;
+they record `inconclusive` with the page count. Expect a short report with a
+full `inconclusive` list in that case, and read it as "not enough was seen",
+not as "the site is clean". `audit_meta.pages_crawled` is the number to check
+first.

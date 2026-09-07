@@ -1,0 +1,71 @@
+# Live audit corpus — one URL per line, `# archetype` comments ignored.
+#
+# These sites are NOT ground truth and no assertion in live_suite.py depends on
+# any specific site's content. They are a *diversity sample*: the suite asserts
+# invariants that must hold on ANY site, and the corpus exists to make those
+# invariants meet as many markup eras, stacks, CMSs and site shapes as possible.
+# Nothing here is fitted to; sites can be swapped freely.
+#
+# Chosen to span the axes that actually break site auditors:
+#   markup era        1990s table markup .. 2025 React/Next
+#   render model      fully static .. fully client-rendered
+#   scale             a 5-page brochure .. a 10M-URL news archive
+#   sitemap shape     none / flat / deep partitioned index
+#   page-type mix     single-type (docs) .. wide (ecommerce)
+
+# --- documentation: heavy anchors, deep trees, low commercial signal --------
+https://docs.python.org/3/
+https://developer.mozilla.org/en-US/
+https://kubernetes.io/docs/home/
+https://react.dev/
+https://fastapi.tiangolo.com/
+https://docs.djangoproject.com/en/stable/
+https://nginx.org/en/docs/
+
+# --- software / SaaS marketing: JS-heavy, schema-light ----------------------
+https://stripe.com/
+https://vercel.com/
+https://linear.app/
+https://supabase.com/
+https://www.netlify.com/
+https://www.figma.com/
+https://basecamp.com/
+
+# --- publishers: strong Article schema, deep archives, paywall variety ------
+https://www.propublica.org/
+https://www.theverge.com/
+https://arstechnica.com/
+https://www.npr.org/
+https://www.bbc.com/news
+https://text.npr.org/
+
+# --- nonprofit / gov / edu: authoritative, often older stacks ---------------
+https://en.wikipedia.org/wiki/Main_Page
+https://archive.org/
+https://www.nasa.gov/
+https://www.who.int/
+https://web.mit.edu/
+https://www.redcross.org/
+
+# --- ecommerce: Product/Offer schema, faceted navigation --------------------
+https://www.patagonia.com/
+https://www.allbirds.com/
+https://www.warbyparker.com/
+https://www.everlane.com/
+https://www.mokobara.com/
+https://www.boat-lifestyle.com/
+https://www.thewholetruthfoods.com/
+
+# --- independent blogs: minimal markup, no schema, strong prose -------------
+https://overreacted.io/
+https://danluu.com/
+https://jvns.ca/
+https://simonwillison.net/
+
+# --- awkward shapes: the ones that break naive crawlers ---------------------
+https://news.ycombinator.com/
+https://www.craigslist.org/
+https://example.com/
+https://motherfuckingwebsite.com/
+https://www.recurse.com/
+https://sqlite.org/index.html

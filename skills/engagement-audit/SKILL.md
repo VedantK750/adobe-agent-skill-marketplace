@@ -10,6 +10,11 @@ allowed-tools: [Bash, Read, Write]
 ## When to use
 After `site-acquisition`. Reads `snapshot.json`; never touches the network.
 
+## Inputs
+- `--workdir DIR` (required) — a directory holding `snapshot.json`.
+  Page weight and response time are read from what the crawler already
+  measured; this skill issues no request of its own.
+
 ## The framing
 This is the second half of the problem: the visitor arrived, do they stay?
 
@@ -46,8 +51,27 @@ below fifteen crawled pages, where it is not yet material. Interruption
 detection is marked low confidence because it infers from copy rather than
 from observed behaviour, and the severity model downgrades it accordingly.
 
-## Run
-`python3 scripts/analyze.py --workdir DIR`
+## Procedure
+1. Load `snapshot.json` and select the landing-candidate page types — the
+   pages an assistant would plausibly send someone to. Legal and listing
+   pages are excluded; nobody is referred to a terms page to get an answer.
+2. Check the arrival conditions: viewport declaration, payload size, and
+   server response time. Response time fires only where slowness is systemic
+   across a meaningful sample, never on a single jittery fetch, so the finding
+   is a property of the site rather than of one request.
+3. Check whether the visitor can orient: a navigation landmark, breadcrumbs,
+   and onward links out of the page they landed on.
+4. Check whether intent can be acted on: a stated next action on
+   conversion-relevant page types.
+5. Check what interrupts: autoplay media, arrival-time subscription prompts,
+   and consent copy that dominates pages carrying little else.
+6. Check the recovery path — on-site search — but only above fifteen crawled
+   pages, below which it is not yet material.
+7. Write the fragment with impact classes and confidence. Copy-inferred
+   checks are marked low confidence, and the severity model downgrades them.
+
+Run: `python3 scripts/analyze.py --workdir DIR`
 
 ## Output
-`fragments/engagement-audit.json`.
+`fragments/engagement-audit.json` — findings, `not_applicable` and
+`inconclusive` records for the orchestrator to compose.

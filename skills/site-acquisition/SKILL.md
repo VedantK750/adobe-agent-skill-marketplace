@@ -1,6 +1,6 @@
 ---
 name: site-acquisition
-description: Crawls a website read-only and produces the shared evidence snapshot every other audit skill reads, then reports access-layer problems - robots.txt blocking AI crawlers, missing or broken sitemaps, error status codes, redirect chains, noindex/nosnippet suppression and missing canonicals. Use as the first step of a brand AI-readiness audit, before any content analysis.
+description: Crawls a website read-only and produces the shared evidence snapshot every other audit skill reads, then reports access-layer problems - an origin that returns no response at all, robots.txt blocking AI crawlers, missing or broken sitemaps, error status codes, redirect chains, noindex/nosnippet suppression and missing canonicals. Use as the first step of a brand AI-readiness audit, before any content analysis.
 license: MIT
 allowed-tools: [Bash, Read, Write]
 ---
@@ -19,6 +19,12 @@ marketplace touches the network.
 Step one of the pipeline: can a machine get in at all? A failure here makes
 every later check moot, so these findings carry blocking impact.
 
+- `ACC-NO-RESPONSE` — the origin answered nothing at all (DNS failure, refused
+  connection, total timeout, or a bot filter dropping non-browser agents). It
+  runs before every other check, and when it fires the checks that need a
+  response record `inconclusive` instead of reporting their own symptom.
+  Otherwise a dead host is misdiagnosed as "no robots.txt" and "no sitemap" —
+  asserting facts about markup that was never seen.
 - `ACC-AI-CRAWLER-BLOCKED` — robots.txt disallows GPTBot, ClaudeBot,
   PerplexityBot, CCBot, Google-Extended and similar. Frequently a copied
   default rather than a decision, and invisible to anyone browsing the site.

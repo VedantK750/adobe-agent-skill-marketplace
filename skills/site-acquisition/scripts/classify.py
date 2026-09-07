@@ -157,13 +157,32 @@ def classify_page(page, base=None):
     has_cart = bool(CART_RE.search(text))
     link_density = page.get("internal_links", 0)
 
-    if url_guess in ("product", "category"):
-        # Many links plus repeated prices reads as a listing, not a detail page.
+    if url_guess == "category":
+        # A URL that literally says /collections/ or /category/ is strong
+        # evidence, and content heuristics must not casually overrule it.
+        #
+        # Storefront grids show a price per tile and, on most Shopify themes, a
+        # quick-add control on every tile. The old shared rule read those as
+        # "has_cart or has_price" and promoted the page to `product`, so the
+        # structured-data check then reported "no Product schema" on a
+        # collection page -- which correctly has none, because a listing of
+        # forty items is an ItemList, not a Product. On a D2C corpus this was a
+        # steady false positive against exactly the sites the audit is most
+        # often pointed at, since /collections/ is the Shopify default.
+        #
+        # Demote to `product` only where the page really is a single item: a
+        # cart control, few onward links, and few sections.
+        if has_cart and link_density < 25 and h2_count <= 4:
+            return "product"
+        return "category"
+
+    if url_guess == "product":
+        # Conversely, a /products/ URL that is dense with links and prices but
+        # carries no cart control is a listing wearing a product path.
         if link_density > 40 and has_price and not has_cart:
             return "category"
-        if has_cart or (has_price and h2_count <= 12):
-            return "product"
-        return url_guess
+        return "product"
+
     if url_guess:
         return url_guess
 

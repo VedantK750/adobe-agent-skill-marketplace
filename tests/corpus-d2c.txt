@@ -1,0 +1,985 @@
+# D2C-weighted candidate corpus for tests/live_suite.py
+#
+# ~1000 candidate domains, heavily weighted toward direct-to-consumer brands --
+# the site shape the audit is most often pointed at, and the one where product
+# schema, faceted navigation, JS storefronts, review widgets and consent
+# banners all interact.
+#
+# This is a CANDIDATE list, not a validated one. Brands fold, rebrand and move
+# domains constantly, so run tests/probe_corpus.py over it first to keep the
+# ones that still answer; the audit suite is expensive per site and should not
+# spend its budget on parked domains. Nothing in the suite is fitted to any
+# entry here -- the invariants reference no site's content -- so entries can be
+# added or dropped freely.
+#
+# Grouped by segment so the firing-rate table can be read per segment: a check
+# that fires on every apparel store and no SaaS site is telling you something
+# about the check, not about apparel.
+
+# === US D2C — footwear ======================================================
+https://www.allbirds.com/
+https://www.rothys.com/
+https://vessi.com/
+https://atoms.com/
+https://thursdayboots.com/
+https://www.koio.co/
+https://www.greats.com/
+https://www.vivobarefoot.com/
+https://www.olukai.com/
+https://www.oncloud.com/
+https://www.hoka.com/
+https://www.brooksrunning.com/
+https://www.newbalance.com/
+https://www.veja-store.com/
+https://cariuma.com/
+https://www.tecovas.com/
+https://www.nisolo.com/
+https://www.birdies.com/
+https://www.jambys.com/
+https://sorel.com/
+
+# === US D2C — apparel & basics ==============================================
+https://www.everlane.com/
+https://www.cuyana.com/
+https://www.italic.com/
+https://bombas.com/
+https://www.mackweldon.com/
+https://www.untuckit.com/
+https://bonobos.com/
+https://www.outdoorvoices.com/
+https://www.girlfriend.com/
+https://www.vuori.com/
+https://www.aloyoga.com/
+https://www.tenthousand.cc/
+https://www.rhone.com/
+https://www.buckmason.com/
+https://www.tairequipment.com/
+https://www.marinelayer.com/
+https://www.faherty.com/
+https://www.quince.com/
+https://www.reformation.com/
+https://www.madewell.com/
+https://www.frankandoak.com/
+https://www.taylorstitch.com/
+https://www.flintandtinder.com/
+https://kotn.com/
+https://www.pactclothing.com/
+https://www.sezane.com/
+https://www.aritzia.com/
+https://www.lululemon.com/
+https://www.patagonia.com/
+https://www.cottonon.com/
+https://www.uniqlo.com/us/en/
+https://www.tommyjohn.com/
+https://www.savagex.com/
+https://www.skims.com/
+https://www.parade.com/
+https://meundies.com/
+https://www.negativeunderwear.com/
+https://www.thirdlove.com/
+https://www.knix.com/
+https://www.cuup.com/
+
+# === US D2C — eyewear & accessories =========================================
+https://www.warbyparker.com/
+https://felixgray.com/
+https://paireyewear.com/
+https://www.blendersEyewear.com/
+https://goodr.com/
+https://sunski.com/
+https://www.rayban.com/
+https://www.zennioptical.com/
+https://www.eyebuydirect.com/
+https://www.oakley.com/
+https://www.knockaround.com/
+https://www.diff.com/
+https://www.quayaustralia.com/
+
+# === US D2C — jewelry =======================================================
+https://mejuri.com/
+https://www.auratenewyork.com/
+https://www.catbirdnyc.com/
+https://www.baublebar.com/
+https://www.gorjana.com/
+https://www.kendrascott.com/
+https://www.monicavinader.com/
+https://www.missoma.com/
+https://www.astridandmiyu.com/
+https://www.pandora.net/
+https://brilliantearth.com/
+https://www.blueNile.com/
+https://www.vrai.com/
+https://www.aurate.com/
+
+# === US D2C — bags & luggage ================================================
+https://www.awaytravel.com/
+https://www.monos.com/
+https://www.calpaktravel.com/
+https://www.beis.com/
+https://www.dagnedover.com/
+https://www.cuyanabags.com/
+https://www.tortugabackpacks.com/
+https://www.peakdesign.com/
+https://www.bellroy.com/
+https://www.aersf.com/
+https://www.tumi.com/
+https://www.samsonite.com/
+https://www.rimowa.com/
+https://www.paravel.travel/
+https://www.july.com/
+
+# === US D2C — beauty & skincare =============================================
+https://www.glossier.com/
+https://drunkelephant.com/
+https://theordinary.com/
+https://www.deciem.com/
+https://www.tatcha.com/
+https://www.summerfridays.com/
+https://www.youthtothepeople.com/
+https://www.krave-beauty.com/
+https://www.paulaschoice.com/
+https://www.cerave.com/
+https://www.laroche-posay.us/
+https://www.kiehls.com/
+https://www.fentybeauty.com/
+https://www.rarebeauty.com/
+https://www.iliabeauty.com/
+https://www.kosas.com/
+https://www.meritbeauty.com/
+https://www.saie.com/
+https://www.westman-atelier.com/
+https://www.milkmakeup.com/
+https://www.colourpop.com/
+https://www.elfcosmetics.com/
+https://www.thelipbar.com/
+https://www.beautypie.com/
+https://www.curology.com/
+https://www.bubbleskincare.com/
+https://www.topicals.com/
+https://www.versedskin.com/
+https://www.blissworld.com/
+https://www.firstaidbeauty.com/
+
+# === US D2C — haircare & personal care ======================================
+https://www.prose.com/
+https://www.function ofbeauty.com/
+https://www.olaplex.com/
+https://www.ouai.com/
+https://www.briogeohair.com/
+https://www.livingproof.com/
+https://www.hers.com/
+https://www.forhims.com/
+https://www.harrys.com/
+https://www.dollarshaveclub.com/
+https://www.billie.com/
+https://www.athenaclub.com/
+https://www.nativecos.com/
+https://www.eachandevery.com/
+https://www.lume deodorant.com/
+https://www.quip.com/
+https://www.burstoralcare.com/
+https://www.hellotushy.com/
+https://www.whowhatwear.com/
+
+# === US D2C — supplements, health, wellness =================================
+https://ritual.com/
+https://takecareof.com/
+https://www.athleticgreens.com/
+https://drinkag1.com/
+https://www.seed.com/
+https://www.hum nutrition.com/
+https://www.moonjuice.com/
+https://www.gainful.com/
+https://www.thorne.com/
+https://www.legionathletics.com/
+https://www.transparentlabs.com/
+https://www.momentous.com/
+https://www.needed.com/
+https://www.perelel.com/
+https://www.oura ring.com/
+https://ouraring.com/
+https://www.whoop.com/
+https://www.eightsleep.com/
+https://www.therabody.com/
+https://www.hyperice.com/
+
+# === US D2C — food & beverage ===============================================
+https://www.magicspoon.com/
+https://www.chomps.com/
+https://www.rxbar.com/
+https://www.perfectbar.com/
+https://www.kodiakcakes.com/
+https://www.siggis.com/
+https://www.oatly.com/
+https://www.califiafarms.com/
+https://www.olipop.com/
+https://drinkpoppi.com/
+https://www.liquiddeath.com/
+https://www.spindrift.com/
+https://www.bubly.com/
+https://www.recess.com/
+https://www.athletic brewing.com/
+https://athleticbrewing.com/
+https://www.deathwishcoffee.com/
+https://www.bluebottlecoffee.com/
+https://www.counterculturecoffee.com/
+https://www.intelligentsia.com/
+https://www.stumptowncoffee.com/
+https://www.trade.coffee/
+https://www.chamberlaincoffee.com/
+https://www.bulletproof.com/
+https://www.fourSigmatic.com/
+https://www.vitalproteins.com/
+https://www.graza.co/
+https://www.fly bydjerba.com/
+https://www.omsom.com/
+https://www.fly byjing.com/
+https://fly byjing.com/
+https://www.brightland.com/
+https://www.jacobsen salt.com/
+https://www.burlapandbarrel.com/
+https://www.diaspora co.com/
+https://diasporaco.com/
+
+# === US D2C — meal kits & grocery ===========================================
+https://www.hellofresh.com/
+https://www.blueapron.com/
+https://www.homechef.com/
+https://www.factor75.com/
+https://www.sunbasket.com/
+https://www.thrivemarket.com/
+https://www.misfitsmarket.com/
+https://www.imperfectfoods.com/
+https://www.freshdirect.com/
+https://www.instacart.com/
+https://www.gobble.com/
+https://www.dailyharvest.com/
+https://www.sakara.com/
+
+# === US D2C — pets ==========================================================
+https://www.chewy.com/
+https://www.thefarmersdog.com/
+https://www.ollie.com/
+https://www.nomnomnow.com/
+https://www.spotandtango.com/
+https://www.barkbox.com/
+https://bark.co/
+https://www.wildone.com/
+https://www.fable pets.com/
+https://fablepets.com/
+https://www.maxbone.com/
+https://www.petplate.com/
+https://www.jinx.com/
+
+# === US D2C — sleep, home & furniture =======================================
+https://casper.com/
+https://www.purple.com/
+https://www.saatva.com/
+https://www.helixsleep.com/
+https://www.nectarsleep.com/
+https://www.tuftandneedle.com/
+https://www.leesa.com/
+https://www.avocadogreenmattress.com/
+https://www.brooklinen.com/
+https://www.parachutehome.com/
+https://www.boll andbranch.com/
+https://bollandbranch.com/
+https://www.riley home.com/
+https://www.article.com/
+https://www.burrow.com/
+https://www.floydhome.com/
+https://www.interiordefine.com/
+https://www.joybird.com/
+https://www.westelm.com/
+https://www.cb2.com/
+https://www.roomandboard.com/
+https://www.thuma.co/
+https://www.branchfurniture.com/
+https://www.fully.com/
+https://www.uplift desk.com/
+https://www.upliftdesk.com/
+https://www.autonomous.ai/
+https://www.flexispot.com/
+
+# === US D2C — kitchen & cookware ============================================
+https://www.madeincookware.com/
+https://www.greatjones.co/
+https://www.caraway home.com/
+https://www.carawayhome.com/
+https://www.our place.com/
+https://fromourplace.com/
+https://www.hexclad.com/
+https://www.misen.com/
+https://www.materialkitchen.com/
+https://www.equalparts.com/
+https://www.lodgecastiron.com/
+https://www.staub-usa.com/
+https://www.lecreuset.com/
+https://www.zwilling.com/
+https://www.breville.com/
+https://www.smeg.com/
+https://www.fellowproducts.com/
+https://www.baratza.com/
+https://www.chemexcoffeemaker.com/
+https://www.aeropress.com/
+
+# === US D2C — baby & kids ===================================================
+https://www.uppababy.com/
+https://www.nuna.eu/
+https://www.doona.com/
+https://www.lalobaby.com/
+https://www.hellobello.com/
+https://www.coterie.com/
+https://www.honest.com/
+https://www.lovevery.com/
+https://www.melissaanddoug.com/
+https://www.kiwico.com/
+https://www.primary.com/
+https://www.hannaandersson.com/
+https://www.tea collection.com/
+https://www.maisonette.com/
+https://www.bobbie.com/
+
+# === US D2C — fitness & outdoor =============================================
+https://www.onepeloton.com/
+https://www.tonal.com/
+https://www.hydrow.com/
+https://www.mirror.co/
+https://www.bowflex.com/
+https://www.roguefitness.com/
+https://www.reithlete.com/
+https://www.yeti.com/
+https://www.hydroflask.com/
+https://www.stanley1913.com/
+https://www.owalalife.com/
+https://www.nalgene.com/
+https://www.cotopaxi.com/
+https://www.rei.com/
+https://www.backcountry.com/
+https://www.mooseJaw.com/
+https://www.arcteryx.com/
+https://www.thenorthface.com/
+https://www.kuiu.com/
+https://www.filson.com/
+https://www.huckberry.com/
+
+# === US D2C — misc / DTC-native =============================================
+https://www.casetify.com/
+https://www.nomadgoods.com/
+https://www.anker.com/
+https://www.moft.us/
+https://www.grovemade.com/
+https://www.orbitkey.com/
+https://www.ridge.com/
+https://www.ekster.com/
+https://www.trayvax.com/
+https://www.leatherman.com/
+https://www.bespokepost.com/
+https://www.stitchfix.com/
+https://www.rentTheRunway.com/
+https://www.thredup.com/
+https://www.poshmark.com/
+https://www.therealreal.com/
+https://www.vestiairecollective.com/
+https://www.ssense.com/
+https://www.mrporter.com/
+https://www.netaporter.com/
+https://www.matchesfashion.com/
+https://www.farfetch.com/
+https://www.revolve.com/
+https://www.shopbop.com/
+https://www.asos.com/
+https://www.boohoo.com/
+https://www.prettylittlething.com/
+https://www.zara.com/
+https://www.hm.com/
+https://www.mango.com/
+https://www.cos.com/
+https://www.arket.com/
+https://www.weekday.com/
+https://www.monki.com/
+https://www.stories.com/
+
+# === India D2C — personal care & beauty =====================================
+https://mamaearth.in/
+https://www.sugarcosmetics.com/
+https://www.mynykaa.com/
+https://www.nykaa.com/
+https://plumgoodness.com/
+https://beminimalist.co/
+https://www.dotandkey.com/
+https://discoverpilgrim.com/
+https://mcaffeine.com/
+https://beardo.in/
+https://ustraa.com/
+https://bombayshavingcompany.com/
+https://manmatters.com/
+https://bebodywise.com/
+https://www.themancompany.com/
+https://www.wowskinscienceindia.com/
+https://buywow.in/
+https://www.forestessentialsindia.com/
+https://www.kamaayurveda.in/
+https://www.biotique.com/
+https://www.khadinatural.com/
+https://juicychemistry.com/
+https://www.deconstruct.co.in/
+https://foxtale.in/
+https://www.earthrhythm.com/
+https://organicharvest.in/
+https://www.arata.in/
+https://www.bareanatomy.in/
+https://www.tira beauty.com/
+https://www.purplle.com/
+
+# === India D2C — food & beverage ============================================
+https://www.thewholetruthfoods.com/
+https://yogabar.in/
+https://slurrpfarm.com/
+https://www.countrydelight.in/
+https://www.licious.in/
+https://www.freshtohome.com/
+https://www.bigbasket.com/
+https://blinkit.com/
+https://www.zepto now.com/
+https://www.swiggy.com/
+https://www.zomato.com/
+https://www.chaayos.com/
+https://www.bluetokaicoffee.com/
+https://sleepyowl.co/
+https://www.rageCoffee.com/
+https://www.thesouledstore.com/
+https://www.paperboat.com/
+https://www.happilo.com/
+https://www.farmley.com/
+https://truefrog.in/
+https://www.snackible.com/
+https://www.openSecret.in/
+https://opensecret.in/
+https://www.eatbetterco.com/
+
+# === India D2C — apparel & footwear =========================================
+https://bewakoof.com/
+https://www.snitch.co.in/
+https://www.powerlook.in/
+https://damensch.com/
+https://xyxx.in/
+https://www.jockey.in/
+https://www.suta.in/
+https://okhai.org/
+https://nicobar.com/
+https://www.fabindia.com/
+https://www.chumbak.com/
+https://www.wforwoman.com/
+https://www.biba.in/
+https://www.anokhi.com/
+https://www.thelabellife.com/
+https://rareism.com/
+https://www.libas.in/
+https://www.aurelia.in/
+https://www.myntra.com/
+https://www.ajio.com/
+https://www.tatacliq.com/
+https://www.limeroad.com/
+https://www.bata.in/
+https://www.redtape.com/
+https://www.campusshoes.com/
+https://www.liberty shoes.com/
+https://www.metroshoes.com/
+https://www.mochishoes.com/
+https://neemans.com/
+https://www.solethreads.com/
+https://www.yoho.in/
+https://comet.in/
+
+# === India D2C — electronics & lifestyle ====================================
+https://www.boat-lifestyle.com/
+https://www.gonoise.com/
+https://www.fireboltt.com/
+https://www.boult.com/
+https://ptron.in/
+https://www.zebronics.com/
+https://atomberg.com/
+https://www.wakefit.co/
+https://www.sleepycat.in/
+https://thesleepcompany.in/
+https://www.duroflexworld.com/
+https://www.pepperfry.com/
+https://www.urbanladder.com/
+https://www.mokobara.com/
+https://www.safaribags.com/
+https://www.skybags.co.in/
+https://www.americantourister.co.in/
+https://www.wildcraft.in/
+https://www.cello world.com/
+https://www.miltonhome.com/
+https://www.borosil.com/
+https://www.prestigesmartkitchen.com/
+https://www.wonderchef.com/
+https://www.stovekraft.com/
+https://www.bluestoneJewellery.com/
+https://www.bluestone.com/
+https://www.candere.com/
+https://www.caratlane.com/
+https://www.tanishq.co.in/
+https://www.melorra.com/
+https://www.giva.co/
+
+# === India D2C — health, fitness, other =====================================
+https://www.cult.fit/
+https://www.healthkart.com/
+https://www.muscleblaze.com/
+https://www.nutrabay.com/
+https://www.oziva.in/
+https://www.setu.in/
+https://www.kapiva.in/
+https://www.dabur.com/
+https://www.himalayawellness.in/
+https://www.baidyanath.co/
+https://www.pharmeasy.in/
+https://www.netmeds.com/
+https://www.1mg.com/
+https://www.practo.com/
+https://www.mfine.co/
+https://www.lenskart.com/
+https://www.titaneyeplus.com/
+https://www.firstcry.com/
+https://www.hopscotch.in/
+https://www.superbottoms.com/
+https://www.mothersparsh.com/
+https://www.rustorange.com/
+https://www.thesouledstore.com/
+https://www.zouk.co.in/
+https://www.bagsy.in/
+https://www.beco-india.com/
+https://www.brownliving.in/
+
+# === UK / EU D2C ============================================================
+https://www.gymshark.com/
+https://www.castore.com/
+https://www.represent clo.com/
+https://www.endclothing.com/
+https://www.mrporter.com/
+https://www.charlottetilbury.com/
+https://www.cultbeauty.co.uk/
+https://www.lookfantastic.com/
+https://www.feelunique.com/
+https://www.beautybay.com/
+https://www.theinkeylist.com/
+https://www.reveal ation.com/
+https://www.bulk.com/
+https://www.myprotein.com/
+https://www.huel.com/
+https://www.grenade.com/
+https://www.form nutrition.com/
+https://www.pukkaherbs.com/
+https://www.teapigs.co.uk/
+https://www.hotelchocolat.com/
+https://www.montezumas.co.uk/
+https://www.ocado.com/
+https://www.gousto.co.uk/
+https://www.mindfulchef.com/
+https://www.abelandcole.co.uk/
+https://www.riverford.co.uk/
+https://www.simba sleep.com/
+https://simbasleep.com/
+https://www.emma-mattress.co.uk/
+https://www.eve sleep.com/
+https://www.made.com/
+https://www.loaf.com/
+https://www.swoon.com/
+https://www.dunelm.com/
+https://www.johnlewis.com/
+https://www.selfridges.com/
+https://www.libertylondon.com/
+https://www.finisterre.com/
+https://www.passenger clothing.com/
+https://www.rapha.cc/
+https://www.leCol.cc/
+https://www.brompton.com/
+https://www.cowboy.com/
+https://www.vanmoof.com/
+
+# === Marketplaces & large retail (contrast set) =============================
+https://www.amazon.com/
+https://www.etsy.com/
+https://www.ebay.com/
+https://www.walmart.com/
+https://www.target.com/
+https://www.costco.com/
+https://www.bestbuy.com/
+https://www.wayfair.com/
+https://www.overstock.com/
+https://www.ikea.com/
+https://www.homedepot.com/
+https://www.lowes.com/
+https://www.nordstrom.com/
+https://www.macys.com/
+https://www.sephora.com/
+https://www.ulta.com/
+https://www.zappos.com/
+https://www.shopify.com/
+https://www.bigcommerce.com/
+https://www.squarespace.com/
+
+# === US D2C — extended apparel & lifestyle ==================================
+https://www.figs.com/
+https://www.carbon38.com/
+https://www.beyondyoga.com/
+https://www.spanx.com/
+https://www.honeylove.com/
+https://www.shapermint.com/
+https://www.summersalt.com/
+https://www.andieswim.com/
+https://www.londonjeans.com/
+https://www.mott50.com/
+https://www.printfresh.com/
+https://www.lunya.co/
+https://www.cozyearth.com/
+https://www.eberjey.com/
+https://www.stateofmatterapparel.com/
+https://www.westernrise.com/
+https://www.unbound merino.com/
+https://www.wool andprince.com/
+https://www.allbirdsapparel.com/
+https://www.arcticbay.com/
+https://www.stio.com/
+https://www.oros.com/
+https://www.duer.ca/
+https://www.publicrec.com/
+https://www.olivers apparel.com/
+https://www.myles apparel.com/
+https://www.baleaf.com/
+https://www.halara.com/
+https://www.cider.com/
+https://www.princess polly.com/
+https://www.showpo.com/
+https://www.petalandpup.com/
+https://www.hellomolly.com/
+https://www.meshki.com/
+https://www.oh polly.com/
+https://www.whitefox boutique.com/
+https://www.edikted.com/
+https://www.motelrocks.com/
+https://www.nakd.com/
+https://www.stradivarius.com/
+https://www.bershka.com/
+https://www.pullandbear.com/
+https://www.massimodutti.com/
+https://www.reserved.com/
+https://www.sinsay.com/
+
+# === US D2C — extended beauty & grooming ====================================
+https://www.glowrecipe.com/
+https://www.laneige.com/
+https://www.innisfree.com/
+https://www.cosrx.com/
+https://www.beautyofjoseon.com/
+https://www.anua.com/
+https://www.medicube.com/
+https://www.mixsoon.com/
+https://www.roundlab.com/
+https://www.torriden.com/
+https://www.skin1004.com/
+https://www.purito.com/
+https://www.isntree.com/
+https://www.axis-y.com/
+https://www.sulwhasoo.com/
+https://www.tirtir.com/
+https://www.peachandlily.com/
+https://www.thenpure.com/
+https://www.biossance.com/
+https://www.farmacybeauty.com/
+https://www.herbivorebotanicals.com/
+https://www.osea malibu.com/
+https://www.tula.com/
+https://www.bliss.com/
+https://www.eltamd.com/
+https://www.skinceuticals.com/
+https://www.dermalogica.com/
+https://www.murad.com/
+https://www.clinique.com/
+https://www.origins.com/
+https://www.lushusa.com/
+https://www.thebodyshop.com/
+https://www.beekman1802.com/
+https://www.trueBotanicals.com/
+https://www.indielee.com/
+https://www.rmsbeauty.com/
+https://www.jonesroadbeauty.com/
+https://www.patrickta.com/
+https://www.haus labs.com/
+https://www.oneSize.com/
+https://www.tower28beauty.com/
+https://www.glowup.com/
+https://www.stripes beauty.com/
+https://www.blume.com/
+https://www.thrivecausemetics.com/
+
+# === US D2C — extended home, office, outdoor ================================
+https://www.solostove.com/
+https://www.breeo.co/
+https://www.traeger.com/
+https://www.weber.com/
+https://www.oonipizzaovens.com/
+https://ooni.com/
+https://www.gozney.com/
+https://www.blackstoneproducts.com/
+https://www.coleman.com/
+https://www.bigagnes.com/
+https://www.nemoequipment.com/
+https://www.seatosummit.com/
+https://www.thermarest.com/
+https://www.msrgear.com/
+https://www.jetboil.com/
+https://www.gsioutdoors.com/
+https://www.snowpeak.com/
+https://www.helinox.com/
+https://www.gci outdoor.com/
+https://www.yakima.com/
+https://www.thule.com/
+https://www.osprey.com/
+https://www.gregorypacks.com/
+https://www.deuter.com/
+https://www.mysteryranch.com/
+https://www.hyperlitemountaingear.com/
+https://www.zpacks.com/
+https://www.gossamergear.com/
+https://www.durstongear.com/
+https://www.katabaticgear.com/
+https://www.enlightenedequipment.com/
+https://www.westernmountaineering.com/
+https://www.feathered friends.com/
+https://www.rumpl.com/
+https://www.nakie.co/
+https://www.eno hammocks.com/
+https://www.kammok.com/
+https://www.tentsile.com/
+https://www.robens.de/
+
+# === US D2C — extended food, drink, snacks ==================================
+https://www.simplemills.com/
+https://www.hu kitchen.com/
+https://www.lilys.com/
+https://www.unrealsnacks.com/
+https://www.sietefoods.com/
+https://www.latortilla factory.com/
+https://www.banza.com/
+https://www.chickapea.com/
+https://www.explorecuisine.com/
+https://www.barilla.com/
+https://www.rana.com/
+https://www.saffronroad.com/
+https://www.amys.com/
+https://www.annies.com/
+https://www.cascadianfarm.com/
+https://www.purely elizabeth.com/
+https://www.bobs redmill.com/
+https://www.kingarthurbaking.com/
+https://www.anthonysgoods.com/
+https://www.navitasorganics.com/
+https://www.terrasoul.com/
+https://www.thrive market.com/
+https://www.imperfect.com/
+https://www.hungryroot.com/
+https://www.purple carrot.com/
+https://www.splendidspoon.com/
+https://www.mosaic foods.com/
+https://www.cometeer.com/
+https://www.driftaway.coffee/
+https://www.atlascoffeeclub.com/
+https://www.blackriflecoffee.com/
+https://www.lavazza.com/
+https://www.illy.com/
+https://www.peets.com/
+https://www.caribou coffee.com/
+https://www.dunkindonuts.com/
+https://www.starbucks.com/
+https://www.teavana.com/
+https://www.davidstea.com/
+https://www.harney.com/
+https://www.twinings.com/
+https://www.yogiproducts.com/
+https://www.traditionalmedicinals.com/
+https://www.celestialseasonings.com/
+
+# === India D2C — extended ===================================================
+https://www.mamaearth.com/
+https://sirona hygiene.com/
+https://www.nuawoman.com/
+https://www.pee safe.com/
+https://www.carmesi.in/
+https://www.sanfe.in/
+https://www.bombayhemp.com/
+https://www.himalaya storeindia.com/
+https://www.vedix.com/
+https://www.traya.health/
+https://www.mars byghc.in/
+https://www.kindlife.in/
+https://www.wellversed.in/
+https://www.gritzo.com/
+https://www.fast andup.in/
+https://www.trueBasics.com/
+https://www.boldcare.in/
+https://www.skinnsi.com/
+https://www.reequil.com/
+https://www.chemistatplay.com/
+https://www.dermaco.in/
+https://www.thederma co.com/
+https://www.aqualogica.in/
+https://www.itsclensta.com/
+https://www.rasaayana.in/
+https://www.jivisa.com/
+https://www.bodywise.in/
+https://www.hyugalife.com/
+https://www.wishcare.in/
+https://www.mCaffeineIndia.com/
+https://www.honasa.in/
+https://www.thebodyshop.in/
+https://www.nykaafashion.com/
+https://www.westside.com/
+https://www.pantaloons.com/
+https://www.shoppersstop.com/
+https://www.reliancedigital.in/
+https://www.croma.com/
+https://www.vijaysales.com/
+https://www.flipkart.com/
+https://www.meesho.com/
+https://www.snapdeal.com/
+https://www.indiamart.com/
+https://www.jiomart.com/
+https://www.dmart.in/
+https://www.spencers.in/
+https://www.naturebasket.co.in/
+https://www.licious.com/
+https://www.tendercuts.in/
+https://www.zappfresh.com/
+https://www.milkbasket.com/
+https://www.otipy.com/
+https://www.ninjacart.in/
+https://www.wowmomo.com/
+https://www.faasos.com/
+https://www.behrouzbiryani.com/
+https://www.ovenstory.in/
+https://www.mojopizza.in/
+https://www.thegoodbug.com/
+https://www.andme.in/
+https://www.plixlife.com/
+https://www.thehealthyco.in/
+https://www.myfitness.in/
+https://www.pintola.in/
+https://www.alpino.in/
+https://www.max protein.in/
+https://www.ritebite.in/
+https://www.unibic.in/
+https://www.britannia.co.in/
+https://www.parleproducts.com/
+https://www.haldirams.com/
+https://www.bikanervala.com/
+https://www.mtrfoods.com/
+https://www.everest.co.in/
+https://www.mdhspices.com/
+https://www.catchfoods.com/
+https://www.tatasampann.com/
+https://www.fortunefoods.com/
+https://www.saffola.in/
+https://www.amul.com/
+https://www.motherdairy.com/
+https://www.epigamiaShop.com/
+https://www.gowardhan.in/
+https://www.idairy.in/
+
+# === UK/EU/AU D2C — extended ================================================
+https://www.allplants.com/
+https://www.oddbox.co.uk/
+https://www.pasta evangelists.com/
+https://www.bloom andwild.com/
+https://www.freddiesflowers.com/
+https://www.beards andbaubles.com/
+https://www.bloomon.co.uk/
+https://www.papier.com/
+https://www.moonpig.com/
+https://www.notonthehighstreet.com/
+https://www.oliverbonas.com/
+https://www.anthropologie.com/
+https://www.urbanoutfitters.com/
+https://www.freepeople.com/
+https://www.whistles.com/
+https://www.reiss.com/
+https://www.jigsaw-online.com/
+https://www.hobbs.com/
+https://www.phase-eight.com/
+https://www.boden.co.uk/
+https://www.seasalt cornwall.co.uk/
+https://www.joules.com/
+https://www.fatface.com/
+https://www.whitestuff.com/
+https://www.mint velvet.com/
+https://www.cos stores.com/
+https://www.uniqlo.com/uk/en/
+https://www.arket.com/en/
+https://www.ganni.com/
+https://www.samsoe.com/
+https://www.wood wood.com/
+https://www.norse projects.com/
+https://www.acnestudios.com/
+https://www.stutterheim.com/
+https://www.fjallraven.com/
+https://www.haglofs.com/
+https://www.peakperformance.com/
+https://www.icebreaker.com/
+https://www.smartwool.com/
+https://www.darn tough.com/
+https://www.stance.com/
+https://www.happysocks.com/
+https://www.paulsmith.com/
+https://www.tedbaker.com/
+https://www.charleskeith.com/
+https://www.pedro shoes.com/
+https://www.lovebonito.com/
+https://www.zalora.com/
+https://www.thehut.com/
+https://www.coggles.com/
+https://www.allsole.com/
+https://www.zavvi.com/
+https://www.iwoot.com/
+
+# === Non-D2C control set: docs, SaaS, publishers, gov, blogs ================
+# Kept so the firing-rate table has a contrast group. A check that fires on
+# every storefront and no documentation site may be measuring page type rather
+# than defect, and that only shows up against a control.
+https://docs.python.org/3/
+https://developer.mozilla.org/en-US/
+https://kubernetes.io/docs/home/
+https://react.dev/
+https://fastapi.tiangolo.com/
+https://docs.djangoproject.com/en/stable/
+https://nginx.org/en/docs/
+https://sqlite.org/index.html
+https://stripe.com/
+https://vercel.com/
+https://linear.app/
+https://supabase.com/
+https://www.netlify.com/
+https://www.figma.com/
+https://basecamp.com/
+https://www.propublica.org/
+https://www.theverge.com/
+https://arstechnica.com/
+https://www.npr.org/
+https://www.bbc.com/news
+https://en.wikipedia.org/wiki/Main_Page
+https://archive.org/
+https://www.nasa.gov/
+https://www.who.int/
+https://web.mit.edu/
+https://www.redcross.org/
+https://overreacted.io/
+https://danluu.com/
+https://jvns.ca/
+https://simonwillison.net/
+https://news.ycombinator.com/
+https://www.craigslist.org/
+https://example.com/
+https://motherfuckingwebsite.com/
+https://www.recurse.com/
