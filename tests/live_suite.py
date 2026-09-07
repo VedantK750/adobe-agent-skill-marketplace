@@ -432,6 +432,25 @@ def aggregate(rows, all_check_ids):
                           for f in r["findings"])]
     nr_share = (100.0 * len(no_response) / n) if n else 0.0
 
+    # Crawl depth is the confounder behind almost every misleading aggregate.
+    # Nearly all findings are drawn from a page sample, and the small-sample gate
+    # holds site-wide claims silent below three content pages -- so if depth
+    # collapses, firing rates fall across the board and it looks exactly like a
+    # detection improvement. It also moves site type: with only a home page
+    # sampled there is no product or category evidence, so storefronts read as
+    # `unknown`.
+    #
+    # This is not theoretical. Running this corpus four times in a few hours
+    # drew rate limiting from shared commerce CDNs -- robots.txt answering 403,
+    # 429, 420 -- and median depth fell from 10 pages to 1. The resulting
+    # distribution shift was very nearly diagnosed as a classifier regression
+    # and "fixed". Report depth alongside every rate so the comparison can be
+    # thrown out rather than believed.
+    depths = sorted((r.get("pages_crawled") or 0) for r in audited)
+    depth_median = depths[len(depths) // 2] if depths else 0
+    one_page_share = (100.0 * sum(1 for d in depths if d <= 1) / len(depths)
+                      if depths else 0.0)
+
     return {
         "sites_attempted": len(rows),
         "sites_audited": n,
@@ -457,6 +476,15 @@ def aggregate(rows, all_check_ids):
         "no_response_sites": len(no_response),
         "no_response_share_pct": round(nr_share, 1),
         "network_saturation_suspected": nr_share > 10.0,
+        "pages_crawled_median": depth_median,
+        "sites_with_one_page_pct": round(one_page_share, 1),
+        # Only meaningful over a real sample. On a handful of sites a single
+        # legitimately one-page site (a placeholder, a JS shell) swings the
+        # share past any threshold, and a warning that cries wolf on every
+        # smoke run is one nobody reads on the run that matters.
+        "shallow_crawl_suspected": (len(depths) >= 20
+                                    and (depth_median < 3
+                                         or one_page_share > 35.0)),
     }
 
 
@@ -474,6 +502,12 @@ def write_markdown(path, agg, rows):
     L.append("| slowest audit | %.1fs (budget %ds) |"
              % (agg["runtime_seconds_max"], RUNTIME_BUDGET_SECONDS))
     L.append("| mean audit runtime | %.1fs |" % agg["runtime_seconds_mean"])
+    L.append("| median pages crawled | %d%s |"
+             % (agg["pages_crawled_median"],
+                " **(shallow — rates not comparable)**"
+                if agg["shallow_crawl_suspected"] else ""))
+    L.append("| sites yielding <=1 page | %.0f%% |"
+             % agg["sites_with_one_page_pct"])
     L.append("| findings per site (min/median/max) | %d / %d / %d |"
              % (agg["findings_per_site"]["min"],
                 agg["findings_per_site"]["median"],
@@ -630,6 +664,19 @@ def main():
              agg["findings_per_site"]["max"]))
     print("Sites with a critical finding: %d/%d."
           % (agg["sites_with_a_critical"], agg["sites_audited"]))
+
+    if agg["shallow_crawl_suspected"]:
+        print("\nWARNING - median crawl depth is %d page(s); %.0f%% of sites "
+              "yielded one page or none."
+              % (agg["pages_crawled_median"], agg["sites_with_one_page_pct"]))
+        print("  Treat every firing rate in this run as UNCOMPARABLE to other")
+        print("  runs. Most checks generalise from a page sample and stay")
+        print("  silent below three pages, so a shallow crawl lowers rates")
+        print("  across the board and mimics a detection improvement; it also")
+        print("  pushes storefronts into site type `unknown`. Usual causes are")
+        print("  rate limiting from repeated corpus runs (robots.txt answering")
+        print("  403/429/420) or local network contention. Re-run later, or")
+        print("  with fewer --workers, before drawing any conclusion.")
 
     if agg["network_saturation_suspected"]:
         print("\nWARNING - %d sites (%.0f%%) reported ACC-NO-RESPONSE."

@@ -230,12 +230,28 @@ the suite, and every fixture passed at the time each was found:
 | `AE-NO-DEFINITION` | Asserted "no definition" on pages too text-sparse to read, restating a readability defect as a content one |
 | Wall-clock budget | Checked only between fetches, so one request's retry tail could push an audit past the 5-minute ceiling |
 | Evidence hygiene | `ACC-NO-RESPONSE` rendered "ConnectionError: None" — a Python artefact shown to a reader |
-| Site/page type coupling | Fixing the `/collections/` page type collapsed `product_share`, dropping **212 storefronts** from `ecommerce` to `unknown`. Nothing errored; site type gates whole checks, so the report quietly stopped running some |
+| Site/page type coupling | Commerce evidence at site level counted only `product` pages, so a storefront sampled at `/collections/` could read as `unknown`. Site type gates whole checks, so that silently changes what runs |
 
-The last four came specifically from the D2C corpus, and they are the reason it
+Several came specifically from the D2C corpus, and they are the reason it
 exists: muted hero video, tag-manager iframes, form-wrapped cart buttons and
 client-rendered storefronts are all but universal on commerce sites and all but
 absent from the documentation and publisher sites a general corpus is made of.
+
+### Read crawl depth before believing any rate
+
+The suite reports median pages crawled next to every firing rate, and warns
+when depth collapses. That warning exists because the confounder is genuinely
+deceptive: nearly every check generalises from a page sample and stays silent
+below three pages, so a shallow crawl lowers rates across the board and looks
+exactly like a detection improvement. It also moves site type — with only a
+home page sampled there is no product evidence, so storefronts read as
+`unknown`.
+
+Running this corpus four times in a few hours drew rate limiting from shared
+commerce CDNs (robots.txt answering 403, 429, 420) and median depth fell from
+10 pages to 1. The resulting `ecommerce` 370 → 158 shift looked precisely like
+a classifier regression and was very nearly "fixed" as one. Depth is the first
+thing to rule out, not the last.
 
 Two corpora ship. `tests/corpus.txt` is a compact mixed set for quick runs.
 `tests/corpus-d2c.txt` is a ~900-entry set weighted toward direct-to-consumer
