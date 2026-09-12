@@ -44,12 +44,31 @@ NOW = datetime.now(timezone.utc)
 
 
 def jsonld_dates(page):
+    """Every date value declared in the page's JSON-LD.
+
+    Parsing must tolerate raw control characters inside string values. A
+    newline inside an `articleBody` is a common authoring slip that consumers
+    tolerate, but it makes strict json.loads fail — and a silently skipped
+    block meant a correctly-dated article read as undated, firing FP-NO-DATES
+    on a site (glossier.com) whose articles all carry datePublished. This is
+    the same tolerance structured-data's parse_nodes applies, so the two
+    skills agree on what markup a page actually declares.
+    """
     out = []
     for raw in page.get("jsonld_raw", []) or []:
-        try:
-            data = json.loads(raw)
-        except Exception:
+        text = (raw or "").strip()
+        if not text:
             continue
+        try:
+            data = json.loads(text)
+        except Exception:
+            # Truncated at capture, or recoverable control characters.
+            if text[-1:] not in ("}", "]"):
+                continue
+            try:
+                data = json.loads(re.sub(r"[\x00-\x1f]+", " ", text))
+            except Exception:
+                continue
         stack = [data]
         while stack:
             n = stack.pop()
@@ -89,8 +108,12 @@ def run(workdir):
                 "reading the content. An undated page cannot be preferred over "
                 "an older competitor, and cannot be ruled out as stale either, "
                 "so it tends to be passed over when a current answer is wanted.",
-                A.ratio_evidence("dated-content pages", len(undated), len(datable),
-                                 "No datePublished or dateModified in markup."),
+                A.ratio_evidence(
+                    "dated-content pages", len(undated), len(datable),
+                    "No datePublished/dateModified in JSON-LD. (A visible date "
+                    "or an og:article:published_time may still be present; "
+                    "those are weaker signals that structured-data consumers "
+                    "do not read as the canonical publication date.)"),
                 impact="weakening", affected=len(undated), sampled=len(datable),
                 affected_urls=[p["final_url"] for p in undated],
                 action={

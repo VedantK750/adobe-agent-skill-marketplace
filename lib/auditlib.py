@@ -40,6 +40,65 @@ SITE_TYPES = [
     "documentation", "portfolio", "unknown",
 ]
 
+# schema.org Organization subtypes. An Organization node is very often declared
+# as a SUBTYPE rather than the bare parent term: D2C brands on Shopify emit
+# `OnlineStore` (Ruggable does), publishers emit `NewsMediaOrganization`,
+# clinics emit `MedicalBusiness`. Matching only the literal strings
+# "Organization"/"LocalBusiness" reported "no Organization node anywhere on the
+# site" for sites that declare a perfectly valid one — a high-severity false
+# positive that an author can see is wrong at a glance, which discredits the
+# whole report. Subtype-awareness lives here, once, so every skill that asks
+# "does this site declare a machine-readable identity?" answers it the same way.
+#
+# The list is the schema.org Organization subtree plus the LocalBusiness
+# subtree, which is itself an Organization subtype. Suffix rules below catch
+# the long tail (every `*Business`, `*Store`, `*Shop`, `*Agency`, ...) so an
+# unlisted subtype still resolves correctly.
+ORG_TYPES = {
+    "organization", "localbusiness", "corporation", "onlinestore",
+    "onlinebusiness", "ngo", "educationalorganization", "governmentorganization",
+    "medicalorganization", "newsmediaorganization", "performinggroup",
+    "sportsorganization", "sportsteam", "airline", "consortium",
+    "librarysystem", "researchorganization", "fundingscheme", "cooperative",
+    "politicalparty", "collegeoruniversity", "school", "elementaryschool",
+    "highschool", "middleschool", "preschool", "dentist", "physician",
+    "hospital", "pharmacy", "veterinarycare", "restaurant", "hotel",
+    "lodgingbusiness", "store", "shop", "bakery", "brewery", "winery",
+    "searchrescueorganization", "workersunion", "project", "fundingagency",
+}
+
+# Suffixes that are only ever used by Organization subtypes in schema.org.
+ORG_TYPE_SUFFIXES = (
+    "business", "store", "shop", "agency", "organization", "corporation",
+    "school", "university", "clinic", "dealer", "rental", "service",
+)
+# Terms ending in an ORG_TYPE_SUFFIX that are NOT organizations. `Service` in
+# particular is an intangible (a described offering), not the provider.
+NON_ORG_TYPES = {"service", "financialproduct", "foodservice", "taxiservice",
+                 "broadcastservice", "webapi", "governmentservice", "service"}
+
+
+def is_org_type(type_name):
+    """True when a schema.org @type denotes an Organization (any subtype).
+
+    Case- and URL-insensitive: accepts "Organization", "organization" and
+    "https://schema.org/OnlineStore" alike, because all three appear in the
+    wild and a node is no less valid for being written as a full URL.
+    """
+    t = (type_name or "").strip().lower().rstrip("/")
+    if "/" in t:
+        t = t.rsplit("/", 1)[-1]
+    if not t or t in NON_ORG_TYPES:
+        return False
+    if t in ORG_TYPES:
+        return True
+    return t.endswith(ORG_TYPE_SUFFIXES)
+
+
+def any_org_type(type_names):
+    """True when any @type in an iterable denotes an Organization subtype."""
+    return any(is_org_type(t) for t in (type_names or []))
+
 
 # ---------------------------------------------------------------- snapshot
 

@@ -135,11 +135,26 @@ def classify_page(page, base=None):
     if len(seg) == 1 and re.fullmatch(r"[a-z]{2}(-[a-z]{2})?", seg[0]):
         return "home"
 
-    # 1. Declared schema type is the strongest available signal.
+    # 1. Declared schema type is the strongest available signal — but only for
+    # types that state what the page IS. FAQPage and HowTo are routinely
+    # embedded as *enhancements* on a commerce page (a product detail page
+    # carrying an FAQ block to win a rich result), so treating them as the
+    # page's identity misreads product pages as documentation. quince.com does
+    # exactly this: its product pages declare FAQPage, and every product check
+    # fell silent while documentation checks fired on pages that are not docs.
+    # A defining type wins outright; a supporting type is held back and used
+    # only if nothing stronger identifies the page.
+    SUPPORTING = {"faqpage", "howto"}
+    supporting_guess = None
     for t in declared_types(page):
         base = t.split("/")[-1]
-        if base in SCHEMA_TO_PAGE:
-            return SCHEMA_TO_PAGE[base]
+        if base not in SCHEMA_TO_PAGE:
+            continue
+        if base in SUPPORTING:
+            if supporting_guess is None:
+                supporting_guess = SCHEMA_TO_PAGE[base]
+            continue
+        return SCHEMA_TO_PAGE[base]
 
     # 2. URL shape.
     url_guess = None
@@ -168,8 +183,13 @@ def classify_page(page, base=None):
         return url_guess
 
     # 4. Fall back to content shape when the URL is uninformative.
+    # Commerce evidence outranks a merely supporting FAQ/HowTo block: a page
+    # with an add-to-cart control and a price is a product page regardless of
+    # the FAQ it also carries.
     if has_cart and has_price:
         return "product"
+    if supporting_guess:
+        return supporting_guess
     if DOC_RE.search(text) and h2_count >= 3:
         return "documentation"
     if BOOKING_RE.search(text):

@@ -87,7 +87,32 @@ def run(workdir):
     else:
         f.na("ACC-BLANKET-DISALLOW", "No wildcard root disallow present.")
 
-    if not robots.get("present"):
+    # A 401/403/429 on /robots.txt means we were REFUSED, not that the file is
+    # absent. Reporting "no robots.txt served" for a blocked fetch asserts a
+    # fact we could not observe, so those statuses record `inconclusive`.
+    #
+    # The same reasoning covers TRANSPORT failures. An SSLError, a DNS failure
+    # or a timeout means the request never reached the origin at all, so the
+    # response says nothing about what the site serves — and the cause is very
+    # often on our side of the wire (TLS interception, a sandboxed resolver,
+    # an egress proxy). Declaring "No robots.txt served" there states a fact
+    # about the site that we did not observe, which is exactly the failure this
+    # audit refuses to make. Both go to `inconclusive`, with the reason kept.
+    BLOCKED_STATUSES = (401, 403, 429)
+    status = robots.get("status")
+    unreachable = isinstance(status, str) and status not in ("", "200")
+    if not robots.get("present") and (status in BLOCKED_STATUSES or unreachable):
+        if unreachable:
+            reason = ("GET /robots.txt did not complete (%s), so whether a "
+                      "robots.txt is served could not be determined. A "
+                      "transport-level failure may originate in the auditing "
+                      "environment rather than the site." % status)
+        else:
+            reason = ("GET /robots.txt returned %s (access denied to this "
+                      "crawler), so whether a robots.txt is served could not "
+                      "be determined." % status)
+        f.unknown("ACC-NO-ROBOTS", reason)
+    elif not robots.get("present"):
         f.finding(
             "ACC-NO-ROBOTS",
             "No robots.txt served",
@@ -114,8 +139,29 @@ def run(workdir):
     # -- sitemap -------------------------------------------------------------
     sm = snap.get("sitemap", {})
     url_count = sm.get("url_count", 0)
+    # Same rule as robots: an access-denied sitemap fetch is not evidence the
+    # sitemap is missing. If every error we recorded is a block (401/403/429),
+    # say so rather than claiming the site publishes no sitemap.
+    # Transport failures (SSLError, ConnectionError, Timeout) count as "could
+    # not determine" for the same reason as a 401/403/429: the request never
+    # reached the origin, so its silence is not evidence about the site.
+    sm_errors = " ".join(sm.get("errors") or [])
+    sm_refused = re.search(r"->\s*(401|403|429)\b", sm_errors)
+    # crawl.py records a sitemap failure as either an HTTP status code or the
+    # exception class name. Anything non-numeric is therefore a transport-level
+    # failure ("Timeout", "SSLError", "ConnectionError"), which is the general
+    # rule rather than a list of names that must be kept in sync.
+    sm_unreachable = re.search(r"->\s*[A-Za-z]\w*", sm_errors)
+    sm_blocked = (url_count == 0 and not sm.get("found")
+                  and (sm_refused or sm_unreachable)
+                  and not re.search(r"->\s*(404|410)\b", sm_errors))
     if url_count > 0:
         f.na("ACC-NO-SITEMAP", "Sitemap found with %d URLs." % url_count)
+    elif sm_blocked:
+        f.unknown(
+            "ACC-NO-SITEMAP",
+            "Sitemap fetches did not complete (%s), so whether the site "
+            "publishes a sitemap could not be determined." % sm_errors[:150])
     elif sm.get("found"):
         # A sitemap file WAS fetched but yielded no usable <url> entries within
         # our budgets (a large sitemap index, a partition cutoff, or a slow

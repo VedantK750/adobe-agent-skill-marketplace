@@ -216,11 +216,21 @@ def run(workdir):
             f.na(check_id, "No %s pages detected on this site." % ptype)
             continue
 
+        # "home" and "contact" are satisfied by an identity node of ANY
+        # Organization subtype: a Shopify storefront declaring `OnlineStore`
+        # on its home page has done exactly what this check asks for, and
+        # flagging it for not using the bare parent term would be a false
+        # positive. Other page types keep exact matching — a `Product` page is
+        # not satisfied by an arbitrary subtype of something else.
+        org_satisfies = ptype in ("home", "contact")
         uncovered = []
         for p in group:
             nodes = parsed[p["final_url"]][0]
             have = {t for n in nodes for t in types_of(n)}
-            if not (have & set(expected_types)):
+            covered = bool(have & set(expected_types))
+            if not covered and org_satisfies and A.any_org_type(have):
+                covered = True
+            if not covered:
                 uncovered.append(p)
 
         if uncovered:
@@ -307,8 +317,11 @@ def run(workdir):
              "Declared nodes carry their required properties.")
 
     # -- 5. Organization identity and sameAs ---------------------------------
+    # Subtype-aware: a Shopify D2C brand declaring `OnlineStore`, or a
+    # publisher declaring `NewsMediaOrganization`, HAS an Organization node.
+    # See auditlib.is_org_type.
     org_nodes = [n for p in pages for n in parsed[p["final_url"]][0]
-                 if set(types_of(n)) & {"organization", "localbusiness", "corporation"}]
+                 if A.any_org_type(types_of(n))]
     if not org_nodes:
         f.finding(
             "SD-NO-ORGANIZATION",

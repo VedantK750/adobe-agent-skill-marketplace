@@ -243,9 +243,14 @@ def run(workdir):
     for p in pages:
         for raw in p.get("jsonld_raw") or []:
             low = (raw or "").lower()
-            if '"organization"' in low or '"localbusiness"' in low or \
-                    '"corporation"' in low:
-                has_org = True
+            # Match any declared @type that is an Organization SUBTYPE
+            # (OnlineStore, NewsMediaOrganization, Dentist...), not just the
+            # three literal parent terms, so a site with a valid identity node
+            # is never told it has none. See auditlib.is_org_type.
+            for t in re.findall(r'"@type"\s*:\s*"([^"]+)"', raw or ""):
+                if A.is_org_type(t):
+                    has_org = True
+                    break
             if '"sameas"' in low:
                 has_sameas = True
     name_for_collision = (claims.get("name") or "").split("|")[0]

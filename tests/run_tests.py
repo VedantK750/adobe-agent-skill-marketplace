@@ -29,6 +29,9 @@ import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# The shared library the skills use, so unit assertions can test its helpers
+# directly rather than only through a full pipeline run.
+sys.path.insert(0, os.path.join(ROOT, "lib"))
 FIXTURES = os.path.join(ROOT, "tests", "fixtures")
 RUN_AUDIT = os.path.join(ROOT, "skills", "audit-orchestrator", "scripts",
                          "run_audit.py")
@@ -394,6 +397,218 @@ def run():
            "a real past-year heading still fires FP-STALE-YEAR-HEADINGS")
     expect("FP-STALE-COPYRIGHT" in fired2,
            "a lone stale copyright with no current year still fires")
+
+    # -- Organization subtype + lenient JSON-LD regressions -----------------
+    # Both of these were real false positives found by auditing live D2C
+    # brands, not by the fixtures. They are pinned here so they cannot return.
+    print("\nstructured-data / freshness regression units:")
+
+    import auditlib as _A
+
+    # (a) schema.org Organization SUBTYPES must count as an Organization.
+    # ruggable.com declares `OnlineStore` (the Shopify default) and was told
+    # it had "no Organization node anywhere on the site" — a high-severity
+    # finding an author can see is wrong, which discredits the whole report.
+    expect(all(_A.is_org_type(t) for t in
+               ("Organization", "LocalBusiness", "OnlineStore",
+                "NewsMediaOrganization", "Dentist", "ClothingStore",
+                "https://schema.org/OnlineStore")),
+           "Organization subtypes are recognised as an Organization identity")
+    expect(not any(_A.is_org_type(t) for t in
+                   ("Product", "Article", "WebSite", "Person", "Service",
+                    "BreadcrumbList", "FinancialProduct")),
+           "non-Organization types are NOT mistaken for an Organization")
+
+    def run_sd(snapshot):
+        wd = os.path.join(WORK, "unit-sd")
+        if os.path.exists(wd):
+            _sh.rmtree(wd)
+        os.makedirs(wd)
+        with open(os.path.join(wd, "snapshot.json"), "w") as fh:
+            json.dump(snapshot, fh)
+        subprocess.run(
+            [sys.executable, os.path.join(ROOT, "skills", "structured-data",
+                                          "scripts", "analyze.py"),
+             "--workdir", wd], capture_output=True)
+        with open(os.path.join(wd, "fragments", "structured-data.json")) as fh:
+            frag = json.load(fh)
+        _sh.rmtree(wd, ignore_errors=True)
+        return {f["check_id"] for f in frag["findings"]}
+
+    def sd_page(url, ptype, jsonld):
+        return {
+            "url": url, "final_url": url, "status": 200,
+            "raw_html": "<html>x</html>", "text": "Some body text here.",
+            "body_text": "Some body text here.", "headings": [],
+            "page_type": ptype, "images": [], "meta_robots": None,
+            "headers": {}, "jsonld_raw": jsonld,
+        }
+
+    onlinestore = ('{"@context":"https://schema.org","@type":"OnlineStore",'
+                   '"name":"Rugs Co","url":"https://shop.example.com/",'
+                   '"sameAs":["https://www.instagram.com/rugsco"]}')
+    snap_store = {
+        "site": "shop.example.com", "base_url": "https://shop.example.com/",
+        "audited_at": "2026-01-01T00:00:00Z", "site_type": "ecommerce",
+        "render_mode": "static-only", "render_status": "disabled-by-flag",
+        "pages": [sd_page("https://shop.example.com/", "home", [onlinestore])],
+    }
+    fired_store = run_sd(snap_store)
+    expect("SD-NO-ORGANIZATION" not in fired_store,
+           "an OnlineStore node does NOT fire SD-NO-ORGANIZATION")
+    expect("SD-COVERAGE-HOME" not in fired_store,
+           "an OnlineStore node satisfies home-page schema coverage")
+    expect("SD-NO-SAMEAS" not in fired_store,
+           "sameAs on an Organization subtype is read (no SD-NO-SAMEAS)")
+
+    snap_nostore = {
+        "site": "shop.example.com", "base_url": "https://shop.example.com/",
+        "audited_at": "2026-01-01T00:00:00Z", "site_type": "ecommerce",
+        "render_mode": "static-only", "render_status": "disabled-by-flag",
+        "pages": [sd_page("https://shop.example.com/", "home",
+                          ['{"@context":"https://schema.org",'
+                           '"@type":"WebPage","name":"Home"}'])],
+    }
+    expect("SD-NO-ORGANIZATION" in run_sd(snap_nostore),
+           "a site with genuinely no Organization node still fires")
+
+    # (b) JSON-LD with a raw newline inside a string value must still be read.
+    # glossier.com embeds an `articleBody` containing literal newlines; strict
+    # json.loads fails, and every correctly-declared datePublished became
+    # invisible, firing FP-NO-DATES on properly dated articles.
+    dirty = ('{"@context":"https://schema.org","@type":"Article",'
+             '"headline":"A post","articleBody":"Line one\nline two",'
+             '"datePublished":"2025-05-04T11:17:45Z"}')
+    snap_dirty = {
+        "site": "blog.example.com", "base_url": "https://blog.example.com/",
+        "audited_at": "2026-01-01T00:00:00Z", "site_type": "publisher",
+        "render_mode": "static-only", "render_status": "disabled-by-flag",
+        "pages": [dict(page("https://blog.example.com/a",
+                            text="A substantive body of article copy here."),
+                       jsonld_raw=[dirty]),
+                  dict(page("https://blog.example.com/b",
+                            text="Another substantive body of article copy."),
+                       jsonld_raw=[dirty])],
+    }
+    expect("FP-NO-DATES" not in run_freshness(snap_dirty),
+           "dates survive a raw control character in JSON-LD (no FP-NO-DATES)")
+
+    snap_undated = {
+        "site": "blog.example.com", "base_url": "https://blog.example.com/",
+        "audited_at": "2026-01-01T00:00:00Z", "site_type": "publisher",
+        "render_mode": "static-only", "render_status": "disabled-by-flag",
+        "pages": [dict(page("https://blog.example.com/a",
+                            text="A substantive body of article copy here."),
+                       jsonld_raw=['{"@context":"https://schema.org",'
+                                   '"@type":"Article","headline":"No date"}']),
+                  dict(page("https://blog.example.com/b",
+                            text="Another substantive body of article copy."),
+                       jsonld_raw=[])],
+    }
+    expect("FP-NO-DATES" in run_freshness(snap_undated),
+           "genuinely undated articles still fire FP-NO-DATES")
+
+    # -- Unreachable-origin honesty regressions -----------------------------
+    # An SSLError/DNS failure/timeout means the request never reached the
+    # origin, so it is not evidence the site lacks a robots.txt or sitemap —
+    # and the cause is often the auditing environment (TLS interception, a
+    # sandboxed resolver). Asserting "No robots.txt served" there states an
+    # unobserved fact. Found by auditing caraway.com and away.com live.
+    print("\nunreachable-origin honesty units:")
+
+    def run_acq(snapshot):
+        wd = os.path.join(WORK, "unit-acq")
+        if os.path.exists(wd):
+            _sh.rmtree(wd)
+        os.makedirs(wd)
+        with open(os.path.join(wd, "snapshot.json"), "w") as fh:
+            json.dump(snapshot, fh)
+        subprocess.run(
+            [sys.executable, os.path.join(ROOT, "skills", "site-acquisition",
+                                          "scripts", "analyze.py"),
+             "--workdir", wd], capture_output=True)
+        with open(os.path.join(wd, "fragments", "site-acquisition.json")) as fh:
+            frag = json.load(fh)
+        _sh.rmtree(wd, ignore_errors=True)
+        return ({f["check_id"] for f in frag["findings"]},
+                {i["check_id"] for i in frag.get("inconclusive", [])})
+
+    def acq_snap(robots_status, sitemap_error):
+        return {
+            "site": "shop.example.com",
+            "base_url": "https://shop.example.com/",
+            "audited_at": "2026-01-01T00:00:00Z", "site_type": "unknown",
+            "render_mode": "static-only", "render_status": "disabled-by-flag",
+            "robots": {"present": False, "status": robots_status, "body": "",
+                       "ai_agents_blocked": [], "blanket_disallow": False,
+                       "sitemaps": [], "parse_error": None,
+                       "url": "https://shop.example.com/robots.txt"},
+            "sitemap": {"found": False, "url_count": 0, "lastmod": {},
+                        "checked": ["https://shop.example.com/sitemap.xml"],
+                        "errors": ["https://shop.example.com/sitemap.xml -> %s"
+                                   % sitemap_error]},
+            "pages": [],
+        }
+
+    for transport in ("SSLError", "ConnectionError", "Timeout"):
+        fired, unknown = run_acq(acq_snap(transport, transport))
+        expect("ACC-NO-ROBOTS" not in fired and "ACC-NO-ROBOTS" in unknown,
+               "%s on robots.txt is inconclusive, not 'No robots.txt served'"
+               % transport)
+        expect("ACC-NO-SITEMAP" not in fired and "ACC-NO-SITEMAP" in unknown,
+               "%s on the sitemap is inconclusive, not 'no sitemap'" % transport)
+
+    # The negative direction: a site that genuinely answers 404 for both IS
+    # missing them, and must still be told so.
+    fired404, unknown404 = run_acq(acq_snap(404, 404))
+    expect("ACC-NO-ROBOTS" in fired404,
+           "a real 404 on robots.txt still fires ACC-NO-ROBOTS")
+    expect("ACC-NO-SITEMAP" in fired404,
+           "a real 404 on the sitemap still fires ACC-NO-SITEMAP")
+
+    # -- Supporting-schema precedence regressions ---------------------------
+    # FAQPage/HowTo are routinely embedded as enhancements on commerce pages.
+    # Treating them as the page's identity classified quince.com's and
+    # drsquatch.com's product pages as "documentation", silencing every
+    # product check and mislabelling both sites as documentation sites.
+    print("\npage-type precedence units:")
+    sys.path.insert(0, os.path.join(ROOT, "skills", "site-acquisition",
+                                    "scripts"))
+    import classify as _classify
+
+    faq = ('{"@context":"https://schema.org","@type":"FAQPage",'
+           '"mainEntity":[{"@type":"Question","name":"How do I wash it?",'
+           '"acceptedAnswer":{"@type":"Answer","text":"Machine wash cold."}}]}')
+    pdp = {
+        "url": "https://shop.example.com/women/crossiant-ring",
+        "final_url": "https://shop.example.com/women/crossiant-ring",
+        "status": 200, "jsonld_raw": [faq], "headings": [],
+        "body_text": "Crossiant Ring $68.00 ADD TO BAG Free shipping.",
+        "text": "Crossiant Ring $68.00 ADD TO BAG Free shipping.",
+        "internal_links": 20,
+    }
+    expect(_classify.classify_page(pdp, "https://shop.example.com/") == "product",
+           "a product page carrying an FAQ block classifies as product")
+
+    # The negative direction: a genuine FAQ page with no commerce signals must
+    # still classify as documentation, or the fix would simply hide FAQPage.
+    real_faq = {
+        "url": "https://shop.example.com/help/faq",
+        "final_url": "https://shop.example.com/help/faq",
+        "status": 200, "jsonld_raw": [faq], "headings": [],
+        "body_text": "Frequently asked questions about orders and returns.",
+        "text": "Frequently asked questions about orders and returns.",
+        "internal_links": 5,
+    }
+    expect(_classify.classify_page(real_faq, "https://shop.example.com/")
+           == "documentation",
+           "a genuine FAQ page with no commerce signals stays documentation")
+
+    # A defining type still wins outright over a co-declared supporting type.
+    both = dict(pdp, jsonld_raw=[faq, '{"@context":"https://schema.org",'
+                                 '"@type":"Product","name":"Ring"}'])
+    expect(_classify.classify_page(both, "https://shop.example.com/") == "product",
+           "a declared Product outranks a co-declared FAQPage")
 
     # -- Summary ------------------------------------------------------------
     passed = sum(1 for ok, _ in RESULTS if ok)

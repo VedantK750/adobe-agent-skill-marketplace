@@ -177,13 +177,30 @@ SITEMAP_TIME_BUDGET = 30  # seconds
 def _get_text(sess, url, retries=FETCH_RETRIES):
     """Fetch a text/XML resource (robots, sitemap). Returns ("", reason) on
     failure. Transient errors are retried so a flaky robots/sitemap fetch does
-    not needlessly strip the crawl of its seed URLs."""
+    not needlessly strip the crawl of its seed URLs.
+
+    Gzipped sitemaps (`sitemap.xml.gz`) are part of the sitemap protocol and are
+    common on large sites — Airbnb publishes only
+    `sitemap-master-index.xml.gz`. Without decompressing, the body is binary,
+    zero <loc> entries parse, and the site looks as though its sitemap is
+    unreadable. Decompress when the URL or the payload says gzip.
+    """
     last = "error"
     for attempt in range(retries + 1):
         try:
             r = sess.get(url, timeout=DEFAULT_TIMEOUT, allow_redirects=True)
             if r.status_code != 200:
                 return "", r.status_code
+            body = r.content or b""
+            is_gz = (url.lower().endswith(".gz")
+                     or body[:2] == b"\x1f\x8b"
+                     or "gzip" in r.headers.get("Content-Type", "").lower())
+            if is_gz and body[:2] == b"\x1f\x8b":
+                import gzip
+                try:
+                    return gzip.decompress(body).decode("utf-8", "replace"), 200
+                except Exception:
+                    return r.text, 200
             return r.text, 200
         except Exception as exc:
             last = "%s" % type(exc).__name__
@@ -200,8 +217,9 @@ def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT):
     started = time.time()
     urls, entries, seen_maps, errors = [], {}, set(), []
     queue = list(candidates)
+    fetched_ok = 0          # only SUCCESSFUL fetches consume the file budget
 
-    while queue and len(urls) < limit and len(seen_maps) < SITEMAP_FILE_LIMIT:
+    while queue and len(urls) < limit and fetched_ok < SITEMAP_FILE_LIMIT:
         if time.time() - started > SITEMAP_TIME_BUDGET:
             errors.append("sitemap time budget reached; using %d URLs so far"
                           % len(urls))
@@ -212,8 +230,13 @@ def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT):
         seen_maps.add(sm)
         body, status = _get_text(sess, sm)
         if not body:
+            # A 404 candidate (robots often lists stale sitemap paths) must not
+            # burn the budget: blog.mozilla.org declares 19 sitemaps of which
+            # most 404, and counting those exhausted the limit before any real
+            # index was expanded, so the site read as having no sitemap at all.
             errors.append("%s -> %s" % (sm, status))
             continue
+        fetched_ok += 1
         if "<sitemapindex" in body.lower():
             # Only take as many child partitions as remain in the file budget.
             # <loc> values are XML-entity-encoded: a child sitemap URL with a
@@ -222,10 +245,13 @@ def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT):
             # 404s, and the whole sitemap reads as empty — which fired a false
             # ACC-NO-SITEMAP on sites (ProPublica) whose sitemap index is
             # perfectly valid. `html.unescape` turns &amp; back into &.
-            room = max(0, SITEMAP_FILE_LIMIT - len(seen_maps))
+            # Expand children FIRST (prepend), so a valid index is followed
+            # into real <url> entries instead of queueing behind a long list of
+            # sibling candidates that may all 404.
+            room = max(0, SITEMAP_FILE_LIMIT - fetched_ok)
             children = [_html.unescape(x.strip())
                         for x in re.findall(r"(?is)<loc>\s*(.*?)\s*</loc>", body)]
-            queue.extend(children[:room])
+            queue[:0] = children[:room]
             continue
         for block in re.findall(r"(?is)<url>(.*?)</url>", body):
             loc = re.search(r"(?is)<loc>\s*(.*?)\s*</loc>", block)

@@ -64,7 +64,7 @@ measurements out of their reason strings.
 
 ---
 
-## The eight skills
+## Our 8 Skills for efficient audits
 
 | Skill | Concern |
 |---|---|
@@ -164,7 +164,25 @@ end, asserting **both directions** of every check it exercises:
 It also asserts the structural invariants the JSON schema cannot express
 (severity counts match the findings, action priority equals finding severity,
 ids are ordered) and that two audits of the same site produce byte-identical
-reports apart from the timestamp. To audit one fixture by hand instead:
+reports apart from the timestamp.
+
+Alongside the fixtures are **unit regressions pinning every false positive we
+have found on a live site**, each asserted in both directions so the fix cannot
+be a check that simply went quiet:
+
+| Regression | Both directions asserted |
+|---|---|
+| schema.org Organization **subtypes** (`OnlineStore`, `NewsMediaOrganization`, `Dentist`) are an Organization identity | a site with genuinely no Organization node still fires |
+| JSON-LD survives a raw control character in a string value (a newline in `articleBody` hid every `datePublished`) | genuinely undated articles still fire `FP-NO-DATES` |
+| `FAQPage`/`HowTo` are *supporting* markup: a product page carrying an FAQ block is still a product page | a genuine FAQ page with no commerce signals stays `documentation` |
+| an unreachable origin (`SSLError`, DNS failure, timeout) is `inconclusive` | a real `404` still fires `ACC-NO-ROBOTS` / `ACC-NO-SITEMAP` |
+
+The last one is the marketplace's central discipline in miniature. A transport
+failure means the request never reached the origin — often for reasons on the
+auditing side — so "No robots.txt served" would assert a fact about the site
+that was never observed. It is recorded as `inconclusive` instead.
+
+To audit one fixture by hand instead:
 
 ```bash
 python3 -m http.server 8899 --directory tests/fixtures/badsite &
