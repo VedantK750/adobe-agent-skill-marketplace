@@ -212,9 +212,18 @@ def run(workdir):
             "supplies the query match and the sentence supplies the citable "
             "text. When the answer arrives several paragraphs later, the chunk "
             "containing the heading contains no answer to extract.",
+            # Name several of the actual headings, not just one. The heading
+            # text is how an author locates the spot to edit; a single example
+            # standing in for 32 occurrences leaves the rest of the work
+            # undirected. Sorted for determinism, capped so evidence stays
+            # readable.
             "%d question-shaped headings across %d pages are followed by "
-            "preamble rather than a direct answer. Example: \"%s\"."
-            % (len(unanswered), len(q_pages), unanswered[0][1][:80]),
+            "preamble rather than a direct answer. Examples: %s%s"
+            % (len(unanswered), len(q_pages),
+               "; ".join('"%s"' % t[:80] for t in
+                         sorted({t for _, t in unanswered})[:5]),
+               "." if len(set(t for _, t in unanswered)) <= 5
+               else " (and %d more)." % (len(set(t for _, t in unanswered)) - 5)),
             # Prevalence is page-level: how many of the pages that have question
             # headings have at least one unanswered one. Using the heading count
             # as `affected` against a page count as `sampled` produced ratios

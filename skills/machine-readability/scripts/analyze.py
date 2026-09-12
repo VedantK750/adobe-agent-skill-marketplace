@@ -202,15 +202,30 @@ def run(workdir):
              "No text-sparse pages depend on unlabelled fact-bearing images.")
 
     # -- 4. Missing alt text generally --------------------------------------
+    # Counted site-wide, but recorded PER PAGE as well. A bare ratio
+    # ("159/246 content images") tells an author the size of the problem and
+    # nothing about where to start; the worst offending templates are what
+    # makes the fix actionable. Pages are ranked by how many images each is
+    # missing, so the first URLs listed are the highest-yield ones to fix.
     content_imgs, missing_alt = 0, 0
+    per_page = []
     for p in pages:
+        page_total, page_missing = 0, 0
         for i in p.get("images") or []:
             src = i.get("src") or ""
             if DECORATIVE_HINT.search(src):
                 continue
-            content_imgs += 1
+            page_total += 1
             if i.get("alt") is None or not (i.get("alt") or "").strip():
-                missing_alt += 1
+                page_missing += 1
+        content_imgs += page_total
+        missing_alt += page_missing
+        if page_missing:
+            per_page.append((page_missing, p["final_url"]))
+    # Deterministic: sort by missing count descending, then URL ascending, so
+    # the same snapshot always yields the same ordering.
+    per_page.sort(key=lambda x: (-x[0], x[1]))
+    worst_urls = [u for _, u in per_page]
     if content_imgs >= 10 and missing_alt / float(content_imgs) > 0.4:
         f.finding(
             "MR-ALT-COVERAGE",
@@ -219,8 +234,13 @@ def run(workdir):
             "Alt text is the only textual representation of an image available "
             "to an extractor. Without it the visual content contributes nothing "
             "to what a machine understands the page to be about.",
-            A.ratio_evidence("content images", missing_alt, content_imgs),
+            A.ratio_evidence(
+                "content images", missing_alt, content_imgs,
+                "Worst pages: %s." % "; ".join(
+                    "%s (%d missing)" % (u, n) for n, u in per_page[:3])
+                if per_page else ""),
             impact="weakening", affected=missing_alt, sampled=content_imgs,
+            affected_urls=worst_urls,
             action={
                 "summary": "Add descriptive alt text to content images; leave it "
                            "empty only for genuinely decorative ones.",
@@ -300,6 +320,7 @@ def run(workdir):
             "chunks are diluted with repeated site furniture.",
             A.ratio_evidence("HTML pages", len(no_main), len(pages)),
             impact="weakening", affected=len(no_main), sampled=len(pages),
+            affected_urls=[p["final_url"] for p in no_main],
             action={
                 "summary": "Wrap the unique page content in a <main> element.",
                 "effort": "low",

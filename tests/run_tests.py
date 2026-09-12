@@ -610,6 +610,83 @@ def run():
     expect(_classify.classify_page(both, "https://shop.example.com/") == "product",
            "a declared Product outranks a co-declared FAQPage")
 
+    # -- Actionability invariants -------------------------------------------
+    # The fix is the product. A finding an author cannot act on is a complaint,
+    # so these assert the properties that make a remedy usable: it says WHERE
+    # (affected_urls, unless the claim is genuinely site-level), it says HOW
+    # (concrete steps), and it says HOW TO CONFIRM (verification).
+    print("\nactionability invariants:")
+
+    # Checks whose claim really is about the whole site, so per-page URLs
+    # would be meaningless rather than missing.
+    SITE_LEVEL = {
+        "ACC-NO-ROBOTS", "ACC-NO-SITEMAP", "ACC-SITEMAP-NOT-ENUMERABLE",
+        "ACC-AI-CRAWLER-BLOCKED", "ACC-BLANKET-DISALLOW", "SD-NO-ORGANIZATION",
+        "SD-NO-SAMEAS", "EN-NO-SITE-SEARCH", "EC-WEAK-IDENTITY-ANCHORING",
+        "EC-INCONSISTENT-SELF-DESCRIPTION", "EC-NO-EXTERNAL-PROFILES",
+        "EC-FEW-EXTERNAL-PROFILES",
+        "EC-NAME-COLLISION", "EC-SINGLE-SOURCE-CLAIMS", "EC-NAP-INCONSISTENT",
+        "MR-RENDER-GAP", "FP-LASTMOD-UNIFORM", "FP-LASTMOD-DISHONEST",
+    }
+    for label, rep in (("badsite", bad_report), ("goodsite", good_report)):
+        missing_where, missing_how, missing_verify = [], [], []
+        for fdg in rep["findings"]:
+            act = fdg.get("suggested_action") or {}
+            if (fdg["check_id"] not in SITE_LEVEL
+                    and not (fdg.get("affected_urls") or [])):
+                missing_where.append(fdg["check_id"])
+            if not [x for x in (act.get("steps") or []) if x.strip()]:
+                missing_how.append(fdg["check_id"])
+            if not (act.get("verification") or "").strip():
+                missing_verify.append(fdg["check_id"])
+        expect(not missing_where,
+               "%s: every page-level finding names the pages to fix "
+               "(offenders: %s)" % (label, missing_where))
+        expect(not missing_how,
+               "%s: every finding carries concrete remediation steps "
+               "(offenders: %s)" % (label, missing_how))
+        expect(not missing_verify,
+               "%s: every finding says how to verify the fix (offenders: %s)"
+               % (label, missing_verify))
+
+    # MR-ALT-COVERAGE reported a bare site-wide ratio and named no page, so an
+    # author was told the size of the problem and nothing about where to start.
+    alt_snap = {
+        "site": "shop.example.com", "base_url": "https://shop.example.com/",
+        "audited_at": "2026-01-01T00:00:00Z", "site_type": "ecommerce",
+        "render_mode": "static-only", "render_status": "disabled-by-flag",
+        "pages": [{
+            "url": "https://shop.example.com/p/%d" % i,
+            "final_url": "https://shop.example.com/p/%d" % i,
+            "status": 200, "raw_html": "<html><body>x</body></html>",
+            "text": "Body copy.", "body_text": "Body copy.",
+            "headings": [], "page_type": "product", "meta_robots": None,
+            "headers": {}, "jsonld_raw": [], "h1": ["A"],
+            "images": [{"src": "/img/%d-%d.jpg" % (i, j), "alt": ""}
+                       for j in range(6)],
+        } for i in range(3)],
+    }
+    wd_alt = os.path.join(WORK, "unit-alt")
+    if os.path.exists(wd_alt):
+        _sh.rmtree(wd_alt)
+    os.makedirs(wd_alt)
+    with open(os.path.join(wd_alt, "snapshot.json"), "w") as fh:
+        json.dump(alt_snap, fh)
+    subprocess.run(
+        [sys.executable, os.path.join(ROOT, "skills", "machine-readability",
+                                      "scripts", "analyze.py"),
+         "--workdir", wd_alt], capture_output=True)
+    with open(os.path.join(wd_alt, "fragments",
+                           "machine-readability.json")) as fh:
+        alt_frag = json.load(fh)
+    _sh.rmtree(wd_alt, ignore_errors=True)
+    alt = [x for x in alt_frag["findings"]
+           if x["check_id"] == "MR-ALT-COVERAGE"]
+    expect(bool(alt) and len(alt[0].get("affected_urls") or []) == 3,
+           "MR-ALT-COVERAGE names the pages whose images lack alt text")
+    expect(bool(alt) and "Worst pages:" in alt[0]["evidence"],
+           "MR-ALT-COVERAGE ranks the worst offending pages in its evidence")
+
     # -- Summary ------------------------------------------------------------
     passed = sum(1 for ok, _ in RESULTS if ok)
     total = len(RESULTS)
