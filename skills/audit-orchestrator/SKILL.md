@@ -18,7 +18,7 @@ is the only skill in the marketplace invoked directly; it composes the others.
 - `workdir` (optional, default `./audit-run`): where evidence and the report
   are written.
 
-## Guarantees
+## Safety
 Recommend-only. Nothing in this marketplace modifies the target site. All
 requests are GET, robots.txt is obeyed, authenticated and state-changing
 areas are never touched, and every URL is fetched exactly once.

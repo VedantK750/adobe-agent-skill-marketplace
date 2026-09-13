@@ -105,6 +105,8 @@ def dedupe(findings):
 PROACTIVE = [
     {
         "id": "P-001",
+        "requires_pages": True,
+        "redundant_if": ["SD-NO-ORGANIZATION"],
         "title": "Publish a canonical facts page and an llms.txt",
         "rationale": "Gives every consumer one authoritative, plain-text "
                      "source for the brand's core claims, so corroboration "
@@ -124,6 +126,7 @@ PROACTIVE = [
     },
     {
         "id": "P-002",
+        "requires_pages": True,
         "title": "Adopt the answer-block pattern site-wide",
         "rationale": "A question-shaped heading followed by a short, "
                      "self-contained answer is the most reliably quotable "
@@ -140,6 +143,8 @@ PROACTIVE = [
     },
     {
         "id": "P-003",
+        "requires_pages": True,
+        "redundant_if": ["AE-NO-HEADING-ANCHORS"],
         "title": "Add stable heading anchors across the site",
         "rationale": "Lets a citation point at the exact section that answers "
                      "the question rather than at the page, which makes the "
@@ -151,6 +156,7 @@ PROACTIVE = [
     },
     {
         "id": "P-004",
+        "redundant_if": ["SD-NO-SAMEAS"],
         "title": "Build the entity graph: sameAs plus a Wikidata presence",
         "rationale": "Anchors the brand against similarly named entities. "
                      "Without a distinguishing anchor, systems conflate "
@@ -165,6 +171,8 @@ PROACTIVE = [
     },
     {
         "id": "P-005",
+        "requires_pages": True,
+        "redundant_if": ["MR-FACTS-IN-IMAGES"],
         "title": "Convert image-rendered data into HTML tables",
         "rationale": "Specification sheets, price lists and charts delivered "
                      "as images carry facts that no text extractor can read, "
@@ -177,6 +185,7 @@ PROACTIVE = [
     },
     {
         "id": "P-006",
+        "requires_media": True,
         "title": "Publish transcripts for video and audio",
         "rationale": "Converts substance that currently exists only in "
                      "non-text media into extractable, quotable text.",
@@ -214,6 +223,7 @@ PROACTIVE = [
     },
     {
         "id": "P-009",
+        "redundant_if": ["FP-LASTMOD-UNIFORM", "FP-LASTMOD-DISHONEST"],
         "title": "Maintain a changelog with honest dateModified values",
         "rationale": "Gives a defensible freshness signal that survives "
                      "scrutiny, unlike a build-time timestamp applied to every "
@@ -236,6 +246,42 @@ PROACTIVE = [
                   "Keep preheader text meaningful rather than decorative."],
     },
 ]
+
+
+def select_proactive(snap, fired_check_ids):
+    """Choose which standing recommendations this site actually warrants.
+
+    The set is standing, not invented per site, so it stays mechanism-based
+    rather than improvised. But two kinds of entry must not be emitted blindly:
+
+      * ones that presuppose evidence we do not have. On a site where nothing
+        could be crawled (an origin that refused every request), advice about
+        page structure is asserted about pages nobody has seen.
+      * ones already covered by a finding. If the audit has just reported that
+        headings carry no anchors, repeating "add heading anchors" as a
+        proactive idea makes the report look padded and buries the finding,
+        which is the entry that carries the evidence.
+
+    Everything else is emitted, because a defect-free site is exactly where
+    beyond-defect advice earns its place. Selection is a pure function of the
+    snapshot and the fired checks, so it stays deterministic.
+    """
+    pages = [p for p in snap.get("pages", []) if p.get("status") == 200]
+    have_pages = len(pages) > 0
+    have_media = any(p.get("iframes") or p.get("has_autoplay") for p in pages)
+
+    out = []
+    for rec in PROACTIVE:
+        if rec.get("requires_pages") and not have_pages:
+            continue
+        if rec.get("requires_media") and not have_media:
+            continue
+        if set(rec.get("redundant_if", [])) & fired_check_ids:
+            continue
+        out.append({k: v for k, v in rec.items()
+                    if k not in ("requires_pages", "requires_media",
+                                 "redundant_if")})
+    return out
 
 
 def compose(workdir, out_path):
@@ -314,7 +360,8 @@ def compose(workdir, out_path):
             },
         },
         "findings": out,
-        "proactive_recommendations": PROACTIVE,
+        "proactive_recommendations": select_proactive(
+            snap, {f["check_id"] for f in out}),
         "not_applicable": sorted(na, key=lambda x: x["check_id"]),
         "inconclusive": sorted(unknown, key=lambda x: x["check_id"]),
     }

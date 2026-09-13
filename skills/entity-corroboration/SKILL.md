@@ -57,5 +57,12 @@ sites are one source, not many. Domains the brand controls do not count.
 ## Run
 `python3 scripts/analyze.py --workdir DIR`
 
+## Safety
+Recommend-only: this skill reports, it never changes the audited site. It reads
+`snapshot.json` and, when a search tool is supplied, issues read-only search
+queries with a capped query budget. It never fetches authenticated areas,
+submits forms, or sends anything but GET/search reads, and writes only inside
+the working directory.
+
 ## Output
 `fragments/entity-corroboration.json` and `corroboration_targets.json`.

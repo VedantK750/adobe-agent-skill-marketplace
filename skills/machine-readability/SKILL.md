@@ -45,6 +45,12 @@ same basis as large ones.
 ## Run
 `python3 scripts/analyze.py --workdir DIR`
 
+## Safety
+Recommend-only: this skill reports, it never changes the audited site. It is a
+pure function of `snapshot.json` — it opens no network connection at all, so it
+cannot issue a request of any kind, authenticated or otherwise. It writes only
+its own fragment inside the working directory.
+
 ## Output
 `fragments/machine-readability.json` — findings, not-applicable and
 inconclusive records for the orchestrator to compose.

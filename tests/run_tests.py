@@ -686,6 +686,115 @@ def run():
     expect(plain.get("has_autoplay") is False,
            "crawler reports no autoplay when the document truly has none")
 
+    # -- Skill-format and safety hygiene -------------------------------------
+    # Each skill folder must stand on its own: the brief requires every skill
+    # to satisfy the agentskills.io spec independently and to declare its own
+    # guardrails, because a skill can be lifted out of this marketplace and
+    # read alone. A guarantee that lives only in the README is not portable.
+    print("\nskill-format and safety hygiene:")
+    import glob as _glob
+    skill_files = sorted(_glob.glob(os.path.join(ROOT, "skills", "*", "SKILL.md")))
+    expect(len(skill_files) == 8, "all eight skill folders carry a SKILL.md")
+
+    for sf in skill_files:
+        sid = os.path.basename(os.path.dirname(sf))
+        body = open(sf, encoding="utf-8").read()
+        lines = body.splitlines()
+        expect(lines[0].strip() == "---",
+               "%s: SKILL.md opens with YAML frontmatter" % sid)
+        fm_end = next((i for i, l in enumerate(lines[1:], 1)
+                       if l.strip() == "---"), None)
+        fm = "\n".join(lines[1:fm_end or 1])
+        for key in ("name:", "description:", "license:"):
+            expect(key in fm, "%s: frontmatter declares %s" % (sid, key.strip(':')))
+        expect(("name: %s" % sid) in fm,
+               "%s: frontmatter name matches its folder" % sid)
+        expect("allowed-tools:" in fm,
+               "%s: declares its tool needs" % sid)
+        expect("## Safety" in body,
+               "%s: states its read-only guardrails in its own SKILL.md" % sid)
+        expect(len(lines) <= 150,
+               "%s: SKILL.md stays lean (%d lines)" % (sid, len(lines)))
+
+    # The offline analysers claim in their SKILL.md to open no network
+    # connection. That is a promise an evaluator can check, so pin it: none of
+    # them may import a networking library. (entity-corroboration is excluded:
+    # it legitimately consumes search results, and imports urllib.parse for
+    # string handling only.)
+    import re as _re
+    net = _re.compile(
+        r"^\s*(?:import|from)\s+(requests|http|socket|urllib\.request)\b", _re.M)
+    for sid in ("answer-extractability", "engagement-audit",
+                "freshness-provenance", "machine-readability",
+                "structured-data"):
+        src = open(os.path.join(ROOT, "skills", sid, "scripts", "analyze.py"),
+                   encoding="utf-8").read()
+        expect(not net.search(src),
+               "%s imports no networking library (it is snapshot-pure)" % sid)
+
+    # Manifest hygiene: exactly one entrypoint, every declared path real.
+    mani = json.load(open(os.path.join(ROOT, "marketplace.json"), encoding="utf-8"))
+    entries = [s for s in mani["skills"] if s.get("entrypoint")]
+    expect(len(entries) == 1, "manifest marks exactly one entrypoint")
+    expect(all(os.path.isfile(os.path.join(ROOT, s["path"], "SKILL.md"))
+               for s in mani["skills"]),
+           "every manifest path resolves to a real skill folder")
+    expect({s["id"] for s in mani["skills"]} ==
+           {os.path.basename(os.path.dirname(f)) for f in skill_files},
+           "manifest lists exactly the skill folders present (no orphans)")
+
+    # -- Proactive-recommendation relevance ----------------------------------
+    # The standing set is mechanism-based and mostly universal, but two kinds
+    # of entry must not be emitted blindly: advice about pages when no page was
+    # ever retrieved (hims.com answered 403 to everything, so page-structure
+    # advice would be asserted about pages nobody saw), and advice the audit
+    # has already raised as a finding, which reads as padding and buries the
+    # entry that actually carries the evidence.
+    print("\nproactive-recommendation relevance:")
+    sys.path.insert(0, os.path.join(ROOT, "skills", "audit-orchestrator",
+                                    "scripts"))
+    import compose_report as _cr
+
+    def snap_with(pages):
+        return {"site": "example.com", "base_url": "https://example.com/",
+                "audited_at": "2026-01-01T00:00:00Z", "site_type": "ecommerce",
+                "pages": pages}
+
+    live = snap_with([{"url": "https://example.com/", "final_url":
+                       "https://example.com/", "status": 200, "iframes": [],
+                       "has_autoplay": False}])
+    blocked = snap_with([{"url": "https://example.com/", "final_url":
+                          "https://example.com/", "status": 403,
+                          "iframes": [], "has_autoplay": False}])
+    with_media = snap_with([{"url": "https://example.com/", "final_url":
+                             "https://example.com/", "status": 200,
+                             "iframes": ["https://youtube.com/embed/x"],
+                             "has_autoplay": False}])
+
+    ids = lambda snap, fired=frozenset(): [
+        r["id"] for r in _cr.select_proactive(snap, set(fired))]
+
+    expect("P-002" in ids(live),
+           "page-structure advice is offered when pages were retrieved")
+    expect("P-002" not in ids(blocked),
+           "page-structure advice is withheld when nothing could be crawled")
+    expect(ids(blocked),
+           "an unreachable origin still receives off-page advice")
+    expect("P-006" not in ids(live),
+           "transcript advice is withheld when no media was observed")
+    expect("P-006" in ids(with_media),
+           "transcript advice appears when the site embeds media")
+    expect("P-003" not in ids(live, {"AE-NO-HEADING-ANCHORS"}),
+           "advice already raised as a finding is not repeated proactively")
+    expect("P-003" in ids(live),
+           "that same advice is offered when no finding covers it")
+    expect(not [k for r in _cr.select_proactive(live, set())
+                for k in r if k in ("requires_pages", "requires_media",
+                                    "redundant_if")],
+           "internal gating keys never reach the emitted report")
+    expect(ids(live) == ids(live),
+           "proactive selection is deterministic")
+
     # -- Actionability invariants -------------------------------------------
     # The fix is the product. A finding an author cannot act on is a complaint,
     # so these assert the properties that make a remedy usable: it says WHERE
