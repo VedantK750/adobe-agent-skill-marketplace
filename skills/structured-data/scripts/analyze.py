@@ -141,7 +141,7 @@ def run(workdir):
     for p in pages:
         parsed[p["final_url"]] = parse_nodes(p)
 
-    # -- 1. Any structured data at all --------------------------------------
+    # Any structured data at all
     with_sd = [p for p in pages
                if parsed[p["final_url"]][0] or p.get("has_microdata")]
     if not with_sd:
@@ -181,7 +181,7 @@ def run(workdir):
         f.write(workdir)
         return
 
-    # -- 2. Invalid JSON-LD --------------------------------------------------
+    # Invalid JSON-LD
     broken = [p for p in pages if parsed[p["final_url"]][1]]
     if broken:
         f.finding(
@@ -208,7 +208,7 @@ def run(workdir):
     else:
         f.na("SD-INVALID-JSON", "All JSON-LD blocks parse cleanly.")
 
-    # -- 3. Coverage per page type, gated ------------------------------------
+    # Coverage per page type, gated
     for ptype, (expected_types, required) in EXPECTED.items():
         group = [p for p in pages if p.get("page_type") == ptype]
         check_id = "SD-COVERAGE-%s" % ptype.upper()
@@ -270,7 +270,7 @@ def run(workdir):
             f.na(check_id, "All %d %s pages carry the expected type."
                  % (len(group), ptype))
 
-    # -- 4. Required properties missing --------------------------------------
+    # Required properties missing
     incomplete = []
     for p in pages:
         ptype = p.get("page_type")
@@ -316,7 +316,7 @@ def run(workdir):
         f.na("SD-INCOMPLETE-PROPS",
              "Declared nodes carry their required properties.")
 
-    # -- 5. Organization identity and sameAs ---------------------------------
+    # Organization identity and sameAs
     # Subtype-aware: a Shopify D2C brand declaring `OnlineStore`, or a
     # publisher declaring `NewsMediaOrganization`, HAS an Organization node.
     # See auditlib.is_org_type.
@@ -374,7 +374,7 @@ def run(workdir):
         else:
             f.na("SD-NO-SAMEAS", "Organization node declares sameAs links.")
 
-    # -- 6. Markup contradicting visible text --------------------------------
+    # Markup contradicting visible text
     # A conflict is only declared when the markup states a price and the visible
     # page shows a *different* price in the *same currency*. Two guards prevent
     # false positives that the earlier integer-only comparison allowed:

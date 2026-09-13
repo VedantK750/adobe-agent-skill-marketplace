@@ -92,7 +92,7 @@ def run(workdir):
 
     claims = canonical_claims(snap)
 
-    # -- 1. Outbound identity links -----------------------------------------
+    # Outbound identity links
     # Profiles count whether they are reached by an anchor or declared in
     # Organization.sameAs. Counting only anchors flags sites that have done
     # the work properly in structured data, which is a false positive.
@@ -153,7 +153,7 @@ def run(workdir):
         f.na("EC-FEW-EXTERNAL-PROFILES",
              "Site links to %d external identity platforms." % len(profiles))
 
-    # -- 2. NAP presence and consistency ------------------------------------
+    # NAP presence and consistency
     if snap.get("site_type") == "local-business":
         if not claims.get("phones") or not claims.get("has_address_signal"):
             f.finding(
@@ -192,7 +192,7 @@ def run(workdir):
              "Site type is %s, not a place-based business."
              % snap.get("site_type"))
 
-    # -- 3. Self-description consistency ------------------------------------
+    # Self-description consistency
     home = next((p for p in pages if p.get("page_type") == "home"), None)
     if home:
         title = (home.get("title") or "").strip()
@@ -230,7 +230,7 @@ def run(workdir):
         f.unknown("EC-INCONSISTENT-SELF-DESCRIPTION",
                   "Home page was not retrieved.")
 
-    # -- 3b. Structural collision risk (no search required) -----------------
+    # Structural collision risk (no search required)
     # Even with no off-site search, on-site evidence alone can show that a
     # brand has done nothing to anchor its identity: no external profiles, no
     # Organization/sameAs graph, and a name that is a common word certain to
@@ -303,7 +303,7 @@ def run(workdir):
              "Identity is anchored on-site (profiles/sameAs/Organization present "
              "or the name is distinctive).")
 
-    # -- 4. Off-site corroboration: requires search -------------------------
+    # Off-site corroboration: requires search
     targets = {
         "site": snap.get("site"),
         "claims": claims,

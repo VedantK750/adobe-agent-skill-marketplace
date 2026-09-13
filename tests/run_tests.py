@@ -94,7 +94,7 @@ def reason_for(report, bucket, check_id):
     return None
 
 
-# ---------------------------------------------------------------- assertions
+# assertions
 
 RESULTS = []
 
@@ -133,7 +133,7 @@ def run():
     bad_fire = check_ids(bad_report, "findings")
     good_fire = check_ids(good_report, "findings")
 
-    # -- Positive: each of these MUST fire on the broken site ---------------
+    # Positive: each of these MUST fire on the broken site
     print("\nbadsite - checks that must fire:")
     must_fire = [
         ("ACC-AI-CRAWLER-BLOCKED", "robots.txt blocks GPTBot"),
@@ -151,7 +151,7 @@ def run():
     expect(crit and crit[0]["severity"] == "critical",
            "ACC-AI-CRAWLER-BLOCKED is severity critical")
 
-    # -- Negative: the clean site must NOT raise these ----------------------
+    # Negative: the clean site must NOT raise these
     print("\ngoodsite - checks that must stay silent:")
     must_not_fire = [
         "ACC-AI-CRAWLER-BLOCKED", "ACC-BLANKET-DISALLOW", "SD-ABSENT",
@@ -176,7 +176,7 @@ def run():
            "goodsite raises only medium/low findings if any (got severities: %s)"
            % sorted({f["severity"] for f in good_report["findings"]}))
 
-    # -- conflictsite: the markup-vs-text price disagreement ----------------
+    # conflictsite: the markup-vs-text price disagreement
     print("\nconflictsite - markup contradicts visible price:")
     conflict_fire = check_ids(conflict_report, "findings")
     expect("SD-TEXT-CONFLICT" in conflict_fire,
@@ -202,7 +202,7 @@ def run():
            "SD-TEXT-CONFLICT does NOT fire on the matching-price page "
            "(no full-decimal or cross-currency false positive)")
 
-    # -- Fix #2: entity-corroboration is not a silent no-op offline ----------
+    # Fix #2: entity-corroboration is not a silent no-op offline
     print("\nentity anchoring (works with no search):")
     # badsite has no JSON-LD, no external profiles, no sameAs: a concrete,
     # search-free identity-anchoring risk the skill must surface rather than
@@ -218,7 +218,7 @@ def run():
            "EC-WEAK-IDENTITY-ANCHORING silent when Organization + sameAs present "
            "(conflictsite)")
 
-    # -- Fix #3: render honesty ----------------------------------------------
+    # Fix #3: render honesty
     print("\nrender honesty (tests run with --no-render):")
     # The audit ran with --no-render, so MR-RENDER-GAP is inconclusive. Its
     # reason must say rendering was *disabled*, not that no browser exists —
@@ -230,7 +230,7 @@ def run():
            "MR-RENDER-GAP does not claim a browser was missing when it was "
            "merely disabled")
 
-    # -- Fix #5: a low-confidence brand guess reads as a hypothesis ----------
+    # Fix #5: a low-confidence brand guess reads as a hypothesis
     # AE-ENTITY-NOT-RESTATED, when it fires on a brand inferred only from title
     # text, must phrase the evidence as an assumption. On the fixtures the check
     # may or may not fire; when it does with a title-only guess, assert the
@@ -243,7 +243,7 @@ def run():
                    "%s: title-only brand guess is phrased as an assumption"
                    % name)
 
-    # -- Structural guarantees the schema cannot express --------------------
+    # Structural guarantees the schema cannot express
     print("\nstructural guarantees:")
     for name, rep in (("badsite", bad_report), ("goodsite", good_report)):
         s = rep["summary"]
@@ -274,7 +274,7 @@ def run():
                "%s: every finding has affected <= sampled (offenders: %s)"
                % (name, bad_prev))
 
-    # -- Determinism: audit badsite twice, reports match --------------------
+    # Determinism: audit badsite twice, reports match
     print("\ndeterminism:")
 
     def norm(r):
@@ -320,7 +320,7 @@ def run():
            "analysis is a pure function of the snapshot "
            "(10 runs -> %d distinct report(s))" % len(hashes))
 
-    # -- Focused regression units: freshness false positives ----------------
+    # Focused regression units: freshness false positives
     # These build a synthetic snapshot and run one analyser directly, isolating
     # two false positives found while validating against live sites:
     #   * a blog "posts by year" archive widget (headings 2005..2026) must not
@@ -398,7 +398,7 @@ def run():
     expect("FP-STALE-COPYRIGHT" in fired2,
            "a lone stale copyright with no current year still fires")
 
-    # -- Organization subtype + lenient JSON-LD regressions -----------------
+    # Organization subtype + lenient JSON-LD regressions
     # Both of these were real false positives found by auditing live D2C
     # brands, not by the fixtures. They are pinned here so they cannot return.
     print("\nstructured-data / freshness regression units:")
@@ -508,7 +508,7 @@ def run():
     expect("FP-NO-DATES" in run_freshness(snap_undated),
            "genuinely undated articles still fire FP-NO-DATES")
 
-    # -- Unreachable-origin honesty regressions -----------------------------
+    # Unreachable-origin honesty regressions
     # An SSLError/DNS failure/timeout means the request never reached the
     # origin, so it is not evidence the site lacks a robots.txt or sitemap —
     # and the cause is often the auditing environment (TLS interception, a
@@ -566,7 +566,7 @@ def run():
     expect("ACC-NO-SITEMAP" in fired404,
            "a real 404 on the sitemap still fires ACC-NO-SITEMAP")
 
-    # -- Supporting-schema precedence regressions ---------------------------
+    # Supporting-schema precedence regressions
     # FAQPage/HowTo are routinely embedded as enhancements on commerce pages.
     # Treating them as the page's identity classified quince.com's and
     # drsquatch.com's product pages as "documentation", silencing every
@@ -610,7 +610,7 @@ def run():
     expect(_classify.classify_page(both, "https://shop.example.com/") == "product",
            "a declared Product outranks a co-declared FAQPage")
 
-    # -- Truncated-evidence regressions --------------------------------------
+    # Truncated-evidence regressions
     # Found by auditing misen.com: the snapshot stores only the first 400 000
     # characters of each page, and that store carried megabytes of inlined
     # product JSON before its header markup, so the site's search box sat at
@@ -686,7 +686,7 @@ def run():
     expect(plain.get("has_autoplay") is False,
            "crawler reports no autoplay when the document truly has none")
 
-    # -- Skill-format and safety hygiene -------------------------------------
+    # Skill-format and safety hygiene
     # Each skill folder must stand on its own: the brief requires every skill
     # to satisfy the agentskills.io spec independently and to declare its own
     # guardrails, because a skill can be lifted out of this marketplace and
@@ -743,7 +743,7 @@ def run():
            {os.path.basename(os.path.dirname(f)) for f in skill_files},
            "manifest lists exactly the skill folders present (no orphans)")
 
-    # -- Proactive-recommendation relevance ----------------------------------
+    # Proactive-recommendation relevance
     # The standing set is mechanism-based and mostly universal, but two kinds
     # of entry must not be emitted blindly: advice about pages when no page was
     # ever retrieved (hims.com answered 403 to everything, so page-structure
@@ -795,7 +795,7 @@ def run():
     expect(ids(live) == ids(live),
            "proactive selection is deterministic")
 
-    # -- Actionability invariants -------------------------------------------
+    # Actionability invariants
     # The fix is the product. A finding an author cannot act on is a complaint,
     # so these assert the properties that make a remedy usable: it says WHERE
     # (affected_urls, unless the claim is genuinely site-level), it says HOW
@@ -872,7 +872,7 @@ def run():
     expect(bool(alt) and "Worst pages:" in alt[0]["evidence"],
            "MR-ALT-COVERAGE ranks the worst offending pages in its evidence")
 
-    # -- Summary ------------------------------------------------------------
+    # Summary
     passed = sum(1 for ok, _ in RESULTS if ok)
     total = len(RESULTS)
     print("\n%d/%d assertions passed." % (passed, total))

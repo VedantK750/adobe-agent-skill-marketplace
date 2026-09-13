@@ -23,7 +23,7 @@ def run(workdir):
     pages = snap.get("pages", [])
     robots = snap.get("robots", {})
 
-    # -- AI crawler exclusion ------------------------------------------------
+    # AI crawler exclusion
     blocked = robots.get("ai_agents_blocked") or []
     if blocked:
         f.finding(
@@ -136,7 +136,7 @@ def run(workdir):
     else:
         f.na("ACC-NO-ROBOTS", "robots.txt served (HTTP 200).")
 
-    # -- sitemap -------------------------------------------------------------
+    # sitemap
     sm = snap.get("sitemap", {})
     url_count = sm.get("url_count", 0)
     # Same rule as robots: an access-denied sitemap fetch is not evidence the
@@ -219,7 +219,7 @@ def run(workdir):
                 "verification": "Re-run the audit; sitemap.url_count is non-zero.",
             })
 
-    # -- status and redirects ------------------------------------------------
+    # status and redirects
     errors = [p for p in pages if p.get("status") and p["status"] >= 400]
     if errors:
         f.finding(
@@ -271,7 +271,7 @@ def run(workdir):
     else:
         f.na("ACC-REDIRECT-CHAINS", "No multi-hop redirect chains observed.")
 
-    # -- snippet suppression -------------------------------------------------
+    # snippet suppression
     # noindex/nosnippet on legal boilerplate (terms, addenda, cardholder
     # agreements) is deliberate and correct: those thin, near-duplicate pages
     # are meant to stay out of the index. Flagging them as a discoverability
@@ -322,7 +322,7 @@ def run(workdir):
         f.na("ACC-SNIPPET-SUPPRESSED",
              "No indexing or snippet suppression directives found.")
 
-    # -- canonical -----------------------------------------------------------
+    # canonical
     if html_pages:
         missing = [p for p in html_pages if not p.get("canonical")]
         if len(missing) > len(html_pages) * 0.5:

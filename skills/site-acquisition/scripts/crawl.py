@@ -50,8 +50,6 @@ SKIP_EXT = re.compile(
     r"woff2?|ttf|eot|dmg|exe|rss|xml)$", re.I)
 
 
-# ---------------------------------------------------------------- fetching
-
 def session():
     import requests
     s = requests.Session()
@@ -106,8 +104,6 @@ def fetch(sess, url, timeout=DEFAULT_TIMEOUT, retries=FETCH_RETRIES):
     }
 
 
-# ---------------------------------------------------------------- robots
-
 def read_robots(sess, base):
     url = up.urljoin(base, "/robots.txt")
     body, status = _get_text(sess, url)
@@ -160,8 +156,6 @@ def allowed(rp, url):
     except Exception:
         return True
 
-
-# ---------------------------------------------------------------- sitemap
 
 # We only need a few hundred URLs to seed a diversified, capped crawl. Reading
 # a large site's entire sitemap tree can take longer than the crawl itself
@@ -274,8 +268,6 @@ def read_sitemaps(sess, base, robots_info, limit=SITEMAP_URL_LIMIT):
     }
 
 
-# ---------------------------------------------------------------- discovery
-
 def _registrable(host):
     host = host.lower()
     if host.startswith("www."):
@@ -350,8 +342,6 @@ def diversify(urls):
     return out
 
 
-# ---------------------------------------------------------------- rendering
-
 def try_render(urls, timeout_ms=8000):
     """Render pages with Playwright if it is installed. Absence is fine.
 
@@ -387,7 +377,7 @@ def try_render(urls, timeout_ms=8000):
     return out, "rendered"
 
 
-# ---------------------------------------------------------------- page meta
+# page meta
 
 # Trailing permalink glyphs that section generators (Sphinx, MkDocs, many CMSs)
 # append inside the heading. They are not part of the heading text.
@@ -535,8 +525,6 @@ def page_meta(html, url):
         "body_text": A.main_text(html),
     }
 
-
-# ---------------------------------------------------------------- main
 
 def crawl(start_url, workdir, max_pages, delay, render):
     started = time.time()

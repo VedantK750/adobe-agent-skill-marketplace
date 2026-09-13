@@ -52,7 +52,7 @@ def run(workdir):
                                          "documentation", "contact", "about")]
     landing = landing or pages
 
-    # -- 1. Mobile viewport --------------------------------------------------
+    # Mobile viewport
     no_viewport = [p for p in pages if not p.get("viewport")]
     if len(no_viewport) > len(pages) * 0.3:
         f.finding(
@@ -82,7 +82,7 @@ def run(workdir):
     else:
         f.na("EN-NO-VIEWPORT", "Viewport declared on most pages.")
 
-    # -- 2. Page weight ------------------------------------------------------
+    # Page weight
     heavy = [p for p in landing if p.get("bytes", 0) > HEAVY_BYTES]
     if heavy:
         f.finding(
@@ -154,7 +154,7 @@ def run(workdir):
         f.na("EN-SLOW-RESPONSE",
              "Response times within tolerance on most landing pages.")
 
-    # -- 3. Dead-end pages ---------------------------------------------------
+    # Dead-end pages
     dead_ends = [p for p in landing if p.get("internal_links", 0) < 3]
     if dead_ends:
         f.finding(
@@ -187,7 +187,7 @@ def run(workdir):
     else:
         f.na("EN-DEAD-END-PAGES", "Landing pages offer onward navigation.")
 
-    # -- 4. Orientation ------------------------------------------------------
+    # Orientation
     # Either a navigation landmark or breadcrumbs give a deep arrival somewhere
     # to orient from. Breadcrumbs alone are orientation, so a page that has them
     # is not a finding even without a <nav> element — counting it as one was a
@@ -219,7 +219,7 @@ def run(workdir):
     else:
         f.na("EN-NO-ORIENTATION", "Navigation landmark present on most pages.")
 
-    # -- 5. Call to action ---------------------------------------------------
+    # Call to action
     convertible = [p for p in landing
                    if p.get("page_type") in ("home", "product", "contact", "about")]
     if convertible:
@@ -255,7 +255,7 @@ def run(workdir):
     else:
         f.na("EN-NO-CTA", "No conversion-relevant page types detected.")
 
-    # -- 6. Arrival interruptions -------------------------------------------
+    # Arrival interruptions
     autoplay = [p for p in pages
                 if (p["has_autoplay"] if p.get("has_autoplay") is not None
                     else bool(AUTOPLAY_RE.search(p.get("raw_html") or "")))]
@@ -311,7 +311,7 @@ def run(workdir):
     else:
         f.na("EN-INTERRUPTIONS", "No site-wide arrival interruption pattern found.")
 
-    # -- 7. Consent handling -------------------------------------------------
+    # Consent handling
     consent = [p for p in landing if CONSENT_RE.search(p.get("body_text") or "")]
     thin_behind_consent = [p for p in consent
                            if A.word_count(p.get("body_text") or "") < 200]
@@ -345,7 +345,7 @@ def run(workdir):
         f.na("EN-CONSENT-BLOCKS-CONTENT",
              "No pages appear to be dominated by consent copy.")
 
-    # -- 8. On-site search ---------------------------------------------------
+    # On-site search
     if len(pages) >= 15:
         # Prefer the flag the crawler computed on the untruncated document; fall
         # back to scanning stored HTML only for snapshots taken before that flag

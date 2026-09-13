@@ -96,7 +96,7 @@ def run(workdir):
     dated_types = ("article", "documentation")
     datable = [p for p in pages if p.get("page_type") in dated_types]
 
-    # -- 1. Missing publication dates on dated content ----------------------
+    # Missing publication dates on dated content
     if datable:
         undated = [p for p in datable if not jsonld_dates(p)]
         if len(undated) > len(datable) * 0.5:
@@ -137,7 +137,7 @@ def run(workdir):
         f.na("FP-NO-DATES",
              "No article or documentation pages detected on this site.")
 
-    # -- 2. Undated time-sensitive claims -----------------------------------
+    # Undated time-sensitive claims
     # Product pages are deliberately out of scope: a product page stating its
     # current price with no date is the norm on every store, so firing there
     # produces a finding on 100% of a normal ecommerce site — noise, not signal.
@@ -180,7 +180,7 @@ def run(workdir):
         f.na("FP-UNDATED-TIME-SENSITIVE",
              "No undated time-sensitive pages detected.")
 
-    # -- 3. Stale copyright --------------------------------------------------
+    # Stale copyright
     # A copyright line is very often a range ("© 2001-2024"). What matters is
     # the LATEST year the page names anywhere in a copyright context, not the
     # first: "© 2001-2026" is current, and so is a page that says "© Copyright
@@ -249,7 +249,7 @@ def run(workdir):
     else:
         f.na("FP-STALE-COPYRIGHT", "No stale copyright year detected.")
 
-    # -- 4. Sitemap lastmod honesty -----------------------------------------
+    # Sitemap lastmod honesty
     lastmods = [v for v in (snap.get("sitemap", {}).get("lastmod") or {}).values() if v]
     if lastmods:
         days = set()
@@ -287,7 +287,7 @@ def run(workdir):
     else:
         f.na("FP-LASTMOD-UNIFORM", "No lastmod values available to assess.")
 
-    # -- 5. Author attribution ----------------------------------------------
+    # Author attribution
     articles = [p for p in pages if p.get("page_type") == "article"]
     if articles:
         unattributed = []
@@ -325,7 +325,7 @@ def run(workdir):
     else:
         f.na("FP-NO-AUTHOR", "No article pages detected on this site.")
 
-    # -- 6. Stale year references in headings -------------------------------
+    # Stale year references in headings
     # Only a year embedded in a substantive heading ("State of X in 2019") is a
     # staleness signal. Two shapes must NOT fire, or archive-heavy blogs light
     # up wholesale as a false positive:

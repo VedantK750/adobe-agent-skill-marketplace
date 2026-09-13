@@ -15,7 +15,7 @@ a particular site or CMS.
 import json
 import re
 
-# --- signals ---------------------------------------------------------------
+# - signals
 
 URL_HINTS = [
     ("product", r"/(product|products|item|items|p|shop|store|buy|sku)(/|$)"),

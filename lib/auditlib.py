@@ -14,7 +14,6 @@ import os
 import re
 import sys
 
-# ---------------------------------------------------------------- constants
 
 SEVERITIES = ["critical", "high", "medium", "low"]
 SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
@@ -100,8 +99,6 @@ def any_org_type(type_names):
     return any(is_org_type(t) for t in (type_names or []))
 
 
-# ---------------------------------------------------------------- snapshot
-
 def snapshot_path(workdir):
     return os.path.join(workdir, "snapshot.json")
 
@@ -143,8 +140,6 @@ def ok_pages(snapshot):
         and not p.get("soft_404")
     ]
 
-
-# ---------------------------------------------------------------- fragments
 
 class Fragment:
     """Accumulates one skill's output, then writes it as JSON.
@@ -227,8 +222,6 @@ def load_fragments(workdir):
     return out
 
 
-# ---------------------------------------------------------------- parsing
-
 def soup(html):
     from bs4 import BeautifulSoup
     try:
@@ -270,8 +263,6 @@ def sentences(text):
     parts = re.split(r"(?<=[.!?])\s+", text or "")
     return [p.strip() for p in parts if p.strip()]
 
-
-# ---------------------------------------------------------------- reporting
 
 def pct(part, whole):
     if not whole:

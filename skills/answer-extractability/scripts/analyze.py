@@ -124,7 +124,7 @@ def run(workdir):
         f.write(workdir)
         return
 
-    # -- 1. Chunk self-containment ------------------------------------------
+    # Chunk self-containment
     bad_pages, total_chunks, dangling_chunks = [], 0, 0
     for p in substantive:
         chunks = chunk_paragraphs(p.get("body_text") or "")
@@ -178,7 +178,7 @@ def run(workdir):
              "Most passages name their subject rather than relying on "
              "earlier context.")
 
-    # -- 2. Question headings without a direct answer ------------------------
+    # Question headings without a direct answer
     q_pages, unanswered = [], []
     for p in substantive:
         qs = [h for h in (p.get("headings") or [])
@@ -259,7 +259,7 @@ def run(workdir):
         f.na("AE-QUESTION-NOT-ANSWERED",
              "Question headings are followed by direct answers.")
 
-    # -- 3. Heading anchors --------------------------------------------------
+    # Heading anchors
     anchor_pages = [p for p in substantive
                     if len([h for h in p.get("headings") or []
                             if h.get("level") in (2, 3)]) >= 3]
@@ -298,7 +298,7 @@ def run(workdir):
     else:
         f.na("AE-NO-HEADING-ANCHORS", "Heading anchors present on most pages.")
 
-    # -- 4. Entity restatement ----------------------------------------------
+    # Entity restatement
     brand, brand_source = brand_tokens(snap)
     if brand:
         thin_mention = []
@@ -357,7 +357,7 @@ def run(workdir):
         f.unknown("AE-ENTITY-NOT-RESTATED",
                   "Brand name could not be determined from host and home title.")
 
-    # -- 5. Definitional sentence on the home page ---------------------------
+    # Definitional sentence on the home page
     home = [p for p in pages if p.get("page_type") == "home"]
     if home:
         htext = home[0].get("body_text") or ""
@@ -397,7 +397,7 @@ def run(workdir):
     else:
         f.unknown("AE-NO-DEFINITION", "Home page was not retrieved.")
 
-    # -- 6. Thin pages -------------------------------------------------------
+    # Thin pages
     thin = [p for p in pages
             if p.get("page_type") in ("article", "documentation", "product")
             and A.word_count(p.get("body_text") or "") < 120]
@@ -428,7 +428,7 @@ def run(workdir):
     else:
         f.na("AE-THIN-CONTENT", "No thin content pages detected.")
 
-    # -- 7. Duplicate titles -------------------------------------------------
+    # Duplicate titles
     titles = [(p.get("title") or "").strip().lower() for p in pages if p.get("title")]
     dupes = [t for t, c in Counter(titles).items() if t and c > 1]
     if dupes and len(titles) >= 5:
@@ -456,7 +456,7 @@ def run(workdir):
     else:
         f.na("AE-DUPLICATE-TITLES", "Page titles are distinct.")
 
-    # -- 8. Missing meta descriptions ---------------------------------------
+    # Missing meta descriptions
     no_desc = [p for p in pages if not p.get("meta_description")]
     if len(pages) < A.MIN_SAMPLE:
         f.na("AE-NO-META-DESCRIPTION",

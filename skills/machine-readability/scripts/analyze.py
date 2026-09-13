@@ -47,7 +47,7 @@ def run(workdir):
         f.write(workdir)
         return
 
-    # -- 1. JS render gap ----------------------------------------------------
+    # JS render gap
     if snap.get("render_mode") != "headless":
         # Say *why* rendering did not happen. "No browser installed" and "the
         # auditor chose --no-render" are different facts, and reporting the
@@ -116,7 +116,7 @@ def run(workdir):
                  "Raw and rendered text agree within tolerance on all "
                  "%d rendered pages." % len(rendered_pages))
 
-    # -- 2. Empty-shell proxy (works without a browser) ----------------------
+    # Empty-shell proxy (works without a browser)
     # A genuine client-rendered shell returns almost nothing in the raw HTML:
     # little body text, many scripts, AND few links, because the navigation is
     # injected client-side too. That last condition is what separates a real
@@ -158,7 +158,7 @@ def run(workdir):
         f.na("MR-EMPTY-SHELL",
              "All pages return meaningful body text in the raw response.")
 
-    # -- 3. Facts locked in images ------------------------------------------
+    # Facts locked in images
     offenders, total_imgs = [], 0
     for p in pages:
         imgs = p.get("images") or []
@@ -201,7 +201,7 @@ def run(workdir):
         f.na("MR-FACTS-IN-IMAGES",
              "No text-sparse pages depend on unlabelled fact-bearing images.")
 
-    # -- 4. Missing alt text generally --------------------------------------
+    # Missing alt text generally
     # Counted site-wide, but recorded PER PAGE as well. A bare ratio
     # ("159/246 content images") tells an author the size of the problem and
     # nothing about where to start; the worst offending templates are what
@@ -261,7 +261,7 @@ def run(workdir):
              "Alt text present on %d/%d content images."
              % (content_imgs - missing_alt, content_imgs))
 
-    # -- 5. Heading semantics -----------------------------------------------
+    # Heading semantics
     no_h1 = [p for p in pages if not p.get("h1")]
     multi_h1 = [p for p in pages if len(p.get("h1") or []) > 1]
     if len(no_h1) > len(pages) * 0.3:
@@ -308,7 +308,7 @@ def run(workdir):
     else:
         f.na("MR-MULTI-H1", "Heading hierarchy has a single H1 on most pages.")
 
-    # -- 6. Landmark structure ----------------------------------------------
+    # Landmark structure
     no_main = [p for p in pages if not p.get("has_main")]
     if len(no_main) > len(pages) * 0.6:
         f.finding(
@@ -333,7 +333,7 @@ def run(workdir):
     else:
         f.na("MR-NO-MAIN-LANDMARK", "Main landmark present on most pages.")
 
-    # -- 7. Content trapped in iframes --------------------------------------
+    # Content trapped in iframes
     heavy_iframe = [p for p in pages
                     if len(p.get("iframes") or []) > 0
                     and A.word_count(p.get("body_text") or "") < 150]
