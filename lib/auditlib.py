@@ -26,6 +26,11 @@ SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
 # gating (e.g. product coverage) set their own floors.
 MIN_SAMPLE = 4
 
+# Below this denominator a percentage misleads more than it informs:
+# "1/1 article pages affected (100.0%)" is arithmetically true and rhetorically
+# false. Evidence under it is stated as a plain count instead.
+MIN_DENOMINATOR_FOR_PCT = 4
+
 # The smallest sample a claim *about the site* may generalise from.
 #
 # Most checks are phrased as site-wide absences -- "no structured data
@@ -376,6 +381,19 @@ def pct(part, whole):
     return round(100.0 * part / float(whole), 1)
 
 
+def article_for(word):
+    """"an Article" / "a Product". Schema type names are interpolated into
+    reader-facing steps, so a fixed "a" produced "Emit a Article node" on every
+    article page in the corpus. Sounded, not spelled: an acronym like `FAQPage`
+    is read letter by letter."""
+    if not word:
+        return "a"
+    first = word[0].upper()
+    if word[:2].isupper():          # FAQPage, HowTo-style acronym openings
+        return ("an %s" if first in "AEFHILMNORSX" else "a %s") % word
+    return ("an %s" if first in "AEIOU" else "a %s") % word
+
+
 def plural(n, singular, plural_form=None):
     """"1 page" / "2 pages". Evidence is read by non-experts, and "1 headings
     across 1 pages" reads as a machine talking to itself, which costs the
@@ -385,8 +403,27 @@ def plural(n, singular, plural_form=None):
 
 
 def ratio_evidence(noun, affected, sampled, detail=""):
-    base = "%d/%d %s affected (%s%%)." % (
-        affected, sampled, noun, pct(affected, sampled))
+    """Prevalence as evidence a reader can weigh.
+
+    A percentage is only informative once the denominator can carry one.
+    "1/1 article pages affected (100.0%)" is arithmetically true and rhetorically
+    false: it reads as a sweeping statistical claim when the finding rests on a
+    single page, and a reader who notices discounts the rest of the report.
+    Below a meaningful denominator, state the count plainly and let the number
+    speak for itself.
+    """
+    if sampled < MIN_DENOMINATOR_FOR_PCT:
+        if affected == sampled:
+            base = "%s affected (every one sampled)." % plural(affected, noun[:-1]
+                                                               if noun.endswith("s")
+                                                               else noun)
+        else:
+            base = "%d of %s affected." % (affected, plural(sampled, noun[:-1]
+                                                            if noun.endswith("s")
+                                                            else noun))
+    else:
+        base = "%d/%d %s affected (%s%%)." % (
+            affected, sampled, noun, pct(affected, sampled))
     return (base + " " + detail).strip()
 
 
