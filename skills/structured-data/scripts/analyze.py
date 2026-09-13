@@ -244,8 +244,8 @@ def run(workdir):
                     "priority_hint": "high",
                     "effort": "medium",
                     "steps": [
-                        "Emit a %s node on the %s template."
-                        % (expected_types[0].title(), ptype),
+                        "Emit %s node on the %s template."
+                        % (A.article_for(expected_types[0].title()), ptype),
                         "Populate the required properties: %s."
                         % ", ".join(required),
                         "Source values from the same data the page renders so "

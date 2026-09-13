@@ -946,6 +946,37 @@ def run():
            "every emitted recommendation is schema-shaped and carries no "
            "internal predicate")
 
+    # -- Reader-facing text quality -----------------------------------------
+    # Found by linting the evidence and fix steps across 796 real reports. Both
+    # of these appeared on essentially every site, and both are the kind of
+    # thing that costs a report credibility with the person meant to act on it.
+    print("\nreader-facing text quality:")
+
+    # "1/1 article pages affected (100.0%)" is arithmetically true and
+    # rhetorically false: it reads as a sweeping statistical claim drawn from a
+    # single page. 835 findings in that scan rendered a percentage off a
+    # denominator too small to carry one.
+    expect("%" not in A.ratio_evidence("article pages", 1, 1),
+           "a denominator of one is stated as a count, not as 100%")
+    expect("1 article page " in A.ratio_evidence("article pages", 1, 1),
+           "the singular reads naturally ('1 article page', not '1 article pages')")
+    expect("%" not in A.ratio_evidence("product pages", 2, 3),
+           "a denominator below the threshold carries no percentage")
+    expect("77.8%" in A.ratio_evidence("HTML pages", 7, 9),
+           "a meaningful denominator still gets its percentage")
+
+    # Schema type names are interpolated into fix steps, so a hardcoded "a"
+    # produced "Emit a Article node" wherever article coverage was reported.
+    expect(A.article_for("Article") == "an Article"
+           and A.article_for("Organization") == "an Organization"
+           and A.article_for("Offer") == "an Offer",
+           "vowel-initial schema types take 'an'")
+    expect(A.article_for("Product") == "a Product"
+           and A.article_for("LocalBusiness") == "a LocalBusiness",
+           "consonant-initial schema types take 'a'")
+    expect(A.article_for("FAQPage") == "an FAQPage",
+           "an acronym is sounded, not spelled ('an eff-ay-cue')")
+
     # -- Summary ------------------------------------------------------------
     passed = sum(1 for ok, _ in RESULTS if ok)
     total = len(RESULTS)
