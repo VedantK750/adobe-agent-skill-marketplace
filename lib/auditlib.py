@@ -33,29 +33,21 @@ MIN_DENOMINATOR_FOR_PCT = 4
 
 # The smallest sample a claim *about the site* may generalise from.
 #
-# Most checks are phrased as site-wide absences -- "no structured data
-# anywhere", "pages declare no main landmark", "every page is a dead end". Such
-# a claim is only as good as its denominator, and below three pages there is no
-# "anywhere": the sentence has the grammar of a site-wide defect but the
-# evidence of a single page.
-#
+# Most checks are phrased as site-wide absences ("no structured data anywhere",
+# "every page is a dead end"). Below three pages there is no "anywhere": the
+# sentence has the grammar of a site-wide defect and the evidence of one page.
 # Small crawls are common and legitimate -- a bot filter serves the home page
-# and refuses the rest, a sitemap is unreadable, or the site really is tiny --
-# which is precisely why the floor is needed rather than assumed away. Measured
-# on a 43-site live corpus, an ungated run turned one-page crawls of a
-# placeholder page and of a plain-HTML blog into nine and ten findings
-# respectively, three of them `high`, none supported by what was observed.
+# and refuses the rest, or the site really is that small -- so the floor has to
+# be enforced rather than assumed.
 #
 # Exempt checks are listed in SMALL_SAMPLE_EXEMPT below.
 MIN_SITE_CLAIM_SAMPLE = 3
 
-# Checks the floor does not apply to. Kept as one list, in one place, for the
-# same reason severity is computed once in the orchestrator: a policy applied
-# per call site drifts, and the next check added silently inherits whatever the
-# author happened to think that day. A reviewer can read the entire exemption
-# policy here in one screen.
+# Checks the floor does not apply to. Kept in one list for the same reason
+# severity is computed in one place: applied per call site the policy drifts,
+# and a check added later inherits whatever its author assumed.
 #
-# A check earns an exemption by being one of exactly two things.
+# A check earns an exemption by being one of two things.
 SMALL_SAMPLE_EXEMPT = {
     # 1. ORIGIN-LEVEL -- a property of the host, or of one file at one
     #    well-known path. How many pages we went on to sample has no bearing on
@@ -305,18 +297,11 @@ def main_text(html):
 
 
 def both_texts(html):
-    """(visible_text, main_text) from a SINGLE parse of the document.
+    """(visible_text, main_text) from a single parse of the document.
 
-    The two differ only in how much chrome they remove, so parsing twice to
-    produce them is pure waste -- and not cheap waste: a crawler parsed each
-    page four times (metadata, visible text, main text, links), which on
-    multi-megabyte documents dominated the whole audit's runtime. One storefront
-    spent 674 seconds and kept zero pages.
-
-    Capping the document before parsing looked like the fix and was not: it cut
-    real `<h1>`, `<main>` and JSON-LD off the end of large pages, and the checks
-    that read those fields roughly doubled their firing rate. Parsing once costs
-    the same reduction with no truncation and no fidelity lost.
+    The two differ only in how much chrome they strip, so parsing separately
+    for each doubles the cost for nothing. On multi-megabyte pages parse time
+    dominates the audit's runtime, so this matters more than it looks.
     """
     return both_texts_from(soup(html))
 
@@ -382,10 +367,8 @@ def pct(part, whole):
 
 
 def article_for(word):
-    """"an Article" / "a Product". Schema type names are interpolated into
-    reader-facing steps, so a fixed "a" produced "Emit a Article node" on every
-    article page in the corpus. Sounded, not spelled: an acronym like `FAQPage`
-    is read letter by letter."""
+    """"an Article" / "a Product", for schema type names interpolated into fix
+    steps. Sounded rather than spelled, so `FAQPage` reads "an eff-ay-cue"."""
     if not word:
         return "a"
     first = word[0].upper()
@@ -405,12 +388,9 @@ def plural(n, singular, plural_form=None):
 def ratio_evidence(noun, affected, sampled, detail=""):
     """Prevalence as evidence a reader can weigh.
 
-    A percentage is only informative once the denominator can carry one.
-    "1/1 article pages affected (100.0%)" is arithmetically true and rhetorically
-    false: it reads as a sweeping statistical claim when the finding rests on a
-    single page, and a reader who notices discounts the rest of the report.
-    Below a meaningful denominator, state the count plainly and let the number
-    speak for itself.
+    A percentage needs a denominator that can carry one. "1/1 article pages
+    affected (100.0%)" reads as a sweeping claim drawn from a single page, so
+    below MIN_DENOMINATOR_FOR_PCT the count is stated plainly instead.
     """
     if sampled < MIN_DENOMINATOR_FOR_PCT:
         if affected == sampled:

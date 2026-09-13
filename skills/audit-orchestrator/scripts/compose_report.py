@@ -104,18 +104,14 @@ def dedupe(findings):
 
 
 def proactive_context(snap):
-    """What the site actually is, for deciding which advice is worth giving.
+    """What the site is, for deciding which advice is worth giving.
 
-    Proactive recommendations used to be a fixed list appended verbatim to
-    every report, which meant a documentation site was told to convert
-    image-rendered price lists into HTML tables and a five-page brochure was
-    told to publish video transcripts it has no video for. Advice that plainly
-    does not apply is worse than no advice: it is the same credibility problem
-    as a false positive, and it teaches the reader to skim the section.
+    A fixed list of recommendations tells a documentation site to mark up price
+    tables and a text-only brochure to publish video transcripts. Advice that
+    plainly does not apply costs what a false positive costs.
 
-    Everything here is derived from the evidence snapshot, using the same
-    site-neutral signals the checks use -- never a string tied to a particular
-    site or vendor.
+    Derived from the snapshot using the same site-neutral signals the checks
+    use, never a string tied to a particular site or vendor.
     """
     pages = A.ok_pages(snap)
     page_types = {p.get("page_type") for p in pages}
@@ -154,9 +150,8 @@ def proactive_context(snap):
 def select_proactive(ctx):
     """The recommendations that apply to this site, in declared order.
 
-    Ids are stable across reports -- P-004 means the same thing everywhere --
-    so a suppressed recommendation leaves a gap rather than renumbering the
-    rest. That matters when two audits are read side by side.
+    Ids are stable across reports, so a suppressed recommendation leaves a gap
+    rather than renumbering the rest and changing what P-004 means.
     """
     out = []
     for rec in PROACTIVE:
@@ -321,10 +316,9 @@ PROACTIVE = [
                   "Keep preheader text meaningful rather than decorative."],
     },
 
-    # -- Conditional, and the reason gating was worth building ---------------
-    # These only reach the reports they belong in. Each answers a question
-    # assistants are actually asked about that kind of site, and each is the
-    # sort of thing a generic SEO checklist does not carry.
+    # -- Conditional on site shape -------------------------------------------
+    # Each answers a question assistants are actually asked about that kind of
+    # site, and reaches only the reports where it applies.
     {
         "id": "P-011",
         # A storefront, by page type or by declared schema.

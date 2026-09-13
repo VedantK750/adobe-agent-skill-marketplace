@@ -158,20 +158,15 @@ def classify_page(page, base=None):
     link_density = page.get("internal_links", 0)
 
     if url_guess == "category":
-        # A URL that literally says /collections/ or /category/ is strong
-        # evidence, and content heuristics must not casually overrule it.
+        # A path segment of /collections/ or /category/ states the page's role,
+        # so content evidence may refine it but not overturn it. Storefront
+        # grids show a price and a quick-add control per tile, which a naive
+        # "has cart or has price" rule reads as a product detail page; the
+        # structured-data check then wants Product schema on a listing, which
+        # correctly carries ItemList instead.
         #
-        # Storefront grids show a price per tile and, on most Shopify themes, a
-        # quick-add control on every tile. The old shared rule read those as
-        # "has_cart or has_price" and promoted the page to `product`, so the
-        # structured-data check then reported "no Product schema" on a
-        # collection page -- which correctly has none, because a listing of
-        # forty items is an ItemList, not a Product. On a D2C corpus this was a
-        # steady false positive against exactly the sites the audit is most
-        # often pointed at, since /collections/ is the Shopify default.
-        #
-        # Demote to `product` only where the page really is a single item: a
-        # cart control, few onward links, and few sections.
+        # Demote to `product` only for a genuine single item: cart control, few
+        # onward links, few sections.
         if has_cart and link_density < 25 and h2_count <= 4:
             return "product"
         return "category"
@@ -223,22 +218,16 @@ def classify_site(pages):
     product_share = types.count("product") / n
     article_share = types.count("article") / n
     doc_share = types.count("documentation") / n
-    # Commerce evidence counts category listings alongside product pages. A
-    # storefront is a storefront whether this crawl happened to sample its
-    # /products/ pages or its /collections/ pages, and which of the two a capped
-    # crawl reaches is an accident of sitemap order.
+    # Commerce evidence counts category listings alongside product pages: which
+    # of the two a capped crawl reaches is an accident of sitemap order, and
+    # counting only `product` drops storefronts into `unknown` whenever the
+    # sample happened to land on their listings. Site type gates whole checks,
+    # so that misclassification silently changes what runs.
     #
-    # This is not hypothetical tidiness. When the page classifier was corrected
-    # to stop calling Shopify collection pages `product`, `product_share`
-    # collapsed and 212 storefronts fell out of `ecommerce` into `unknown` on a
-    # 785-site run: a page-level fix silently breaking the site-level inference
-    # that reads its output. Site type gates whole checks, so that changed what
-    # ran without anything failing.
-    #
-    # `product_share` itself is left alone -- the publisher fallback below uses
-    # it to rule commerce out, and a blog's /category/ archives must not read as
-    # a shop. That is also why this share is paired with cart language: a
-    # storefront's listings repeat "add to cart"; an editorial archive does not.
+    # `product_share` itself is deliberately left alone -- the publisher
+    # fallback below uses it to rule commerce out. Pairing this share with cart
+    # language is what keeps a blog's /category/ archives from reading as a
+    # shop: storefront listings repeat "add to cart", editorial archives do not.
     commerce_share = (types.count("product") + types.count("category")) / n
 
     # Strong ecommerce evidence is a real SHARE of product pages or Product/

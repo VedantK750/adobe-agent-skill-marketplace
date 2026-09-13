@@ -43,7 +43,7 @@ do not remove the gate.
 ## Procedure
 1. Load `snapshot.json` and take the successfully fetched HTML pages.
 2. Parse every JSON-LD block, plus microdata and RDFa flags, per page.
-   Record blocks that fail to parse — they are discarded wholesale by
+   Record blocks that fail to parse: they are discarded wholesale by
    consumers, so an invalid block is worse than an absent one.
 3. Flatten `@graph` and array forms into a flat list of typed nodes, so a
    site nesting its entities is measured the same as one that does not.
@@ -55,7 +55,7 @@ do not remove the gate.
 6. Compare markup values against the visible text for the same fact, with
    currency and full decimal matched, so a matching price cannot read as a
    conflict.
-7. Write the fragment. Severity is not assigned here — the orchestrator
+7. Write the fragment. Severity is not assigned here: the orchestrator
    computes it from impact, prevalence and confidence.
 
 Run: `python3 scripts/analyze.py --workdir DIR`
