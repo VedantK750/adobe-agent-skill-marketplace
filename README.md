@@ -62,7 +62,13 @@ ratio. Home detection survives locale redirects (`/` → `/in`, `/en-us`). Links
 are extracted with a parser rather than a pattern, so unquoted attributes
 (`<a href=/foo>`, valid HTML5) and markup split across lines still yield a
 frontier — a regex here fails silently, ending the crawl at the seed page and
-leaving a report that looks thin rather than broken. See
+leaving a report that looks thin rather than broken. Each page is parsed
+**once** and everything is derived from that single tree; parsing it per
+concern instead put a multi-megabyte document through four full parses and cost
+one storefront 674 seconds for nothing. The size cap bounds what reaches the
+snapshot file, never what is analysed — truncating before parsing cuts real
+`<h1>`, `<main>` and JSON-LD off long pages, and a page is not less well built
+because it is long. See
 `skills/site-acquisition/references/classification.md`.
 
 **Determinism is a property of the analysis, not a hope.** The audit is a pure
@@ -230,6 +236,7 @@ the suite, and every fixture passed at the time each was found:
 | `AE-NO-DEFINITION` | Asserted "no definition" on pages too text-sparse to read, restating a readability defect as a content one |
 | Wall-clock budget | Checked only between fetches, so one request's retry tail could push an audit past the 5-minute ceiling |
 | Evidence hygiene | `ACC-NO-RESPONSE` rendered "ConnectionError: None" — a Python artefact shown to a reader |
+| Oversize pages | Each page was parsed **four times** (metadata, visible text, main text, links). One storefront spent **674s and kept zero pages**; parsing once takes 130s and keeps 10. Truncating before parsing looked like the fix and was not — it cut real `<h1>`, `<main>` and JSON-LD off long pages and roughly doubled `MR-NO-H1` and `MR-NO-MAIN-LANDMARK` |
 | Site/page type coupling | Commerce evidence at site level counted only `product` pages, so a storefront sampled at `/collections/` could read as `unknown`. Site type gates whole checks, so that silently changes what runs |
 
 Several came specifically from the D2C corpus, and they are the reason it

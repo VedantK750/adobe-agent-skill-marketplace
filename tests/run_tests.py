@@ -791,6 +791,95 @@ def run():
            "a blog's /category/ archives do NOT make it a storefront (got %s)"
            % classify_site(blog_pages))
 
+    # -- Oversize pages are capped before parsing, not after ----------------
+    # Found on the live corpus: one storefront took 674 seconds and kept ZERO
+    # pages, blowing the brief's five-minute ceiling nearly fourfold. The cap
+    # was applied to the stored HTML but the *uncapped* response was handed to
+    # page_meta (which parses three times) and links_from (a fourth), so four
+    # full parses of a multi-megabyte document ran per page. The wall-clock
+    # budget could not save it: the budget is checked between fetches, and the
+    # parsing happens inside an iteration. Capping once, before parsing, took
+    # the same site to 130 seconds and 10 pages.
+    #
+    # The cap also keeps the snapshot self-consistent. `raw_html` was stored
+    # capped while `text` and `headings` were derived from the uncapped
+    # original, so an analyser re-reading `raw_html` saw a different document
+    # from the one those fields describe.
+    print("\noversize page handling:")
+    big_dir = os.path.join(WORK, "bigsite")
+    if os.path.exists(big_dir):
+        _sh.rmtree(big_dir)
+    os.makedirs(big_dir)
+    filler = "<p>%s</p>\n" % ("lorem ipsum dolor sit amet " * 12)
+    beyond = "UNIQUEMARKERBEYONDTHECAP"
+    with open(os.path.join(big_dir, "index.html"), "w", encoding="utf-8") as fh:
+        fh.write("<html><head><title>Big</title></head><body><main>"
+                 "<h1>Big page</h1>")
+        # Comfortably past the cap, then a marker only reachable beyond it.
+        fh.write(filler * int((C.MAX_HTML_CHARS * 1.4) / len(filler)))
+        fh.write("<p>%s</p></main></body></html>" % beyond)
+
+    big_port = 8896
+    big = serve(big_dir, big_port)
+    try:
+        big_wd = os.path.join(WORK, "bigwork")
+        if os.path.exists(big_wd):
+            _sh.rmtree(big_wd)
+        started_at = time.time()
+        C.crawl("http://127.0.0.1:%d/" % big_port, big_wd, 3, 0.0, render=False)
+        elapsed = time.time() - started_at
+        with open(os.path.join(big_wd, "snapshot.json")) as fh:
+            big_snap = json.load(fh)
+    finally:
+        big.shutdown()
+
+    bp = big_snap["pages"][0]
+    expect(len(bp["raw_html"]) <= C.MAX_HTML_CHARS,
+           "stored raw_html is capped at MAX_HTML_CHARS (%d chars)"
+           % len(bp["raw_html"]))
+    expect(beyond not in bp["raw_html"],
+           "content beyond the cap is absent from stored raw_html")
+    # The cap bounds the SNAPSHOT, never the analysis. Truncating before
+    # parsing was tried and cut real <h1>, <main> and JSON-LD off long pages,
+    # roughly doubling MR-NO-H1 and MR-NO-MAIN-LANDMARK on a 180-site sample.
+    # A page is not less well built because it is long.
+    expect(beyond in (bp.get("text") or ""),
+           "extracted text covers the WHOLE document, including content past "
+           "the storage cap")
+    expect(bp.get("title") == "Big" and A.word_count(bp.get("text") or "") > 100,
+           "the oversize page is parsed normally (title and body present)")
+    expect(elapsed < 60,
+           "an oversize page does not blow the time budget (took %.1fs)"
+           % elapsed)
+    _sh.rmtree(big_dir, ignore_errors=True)
+
+    # The invariant behind that budget: ONE parse per page. It used to be four
+    # (metadata, visible text, main text, links), which is what made a
+    # multi-megabyte page cost 674 seconds and yield nothing. Assert the parse
+    # count directly rather than trusting a timing proxy, because the timing
+    # only fails on a machine slow enough to notice.
+    parses = {"n": 0}
+    _real_soup = A.soup
+
+    def counting_soup(html):
+        parses["n"] += 1
+        return _real_soup(html)
+
+    A.soup = counting_soup
+    try:
+        meta = C.page_meta("<html><head><title>T</title></head><body><main>"
+                           "<h1>H</h1><p>Body copy here.</p>"
+                           "<a href='/x'>x</a></main></body></html>",
+                           "https://example.com/")
+    finally:
+        A.soup = _real_soup
+    expect(parses["n"] == 1,
+           "page_meta parses the document exactly once (got %d parses)"
+           % parses["n"])
+    expect(meta.get("text") and meta.get("body_text")
+           and meta.get("_links") == ["https://example.com/x"],
+           "the single parse still yields text, body text and links")
+
     # -- Summary ------------------------------------------------------------
     passed = sum(1 for ok, _ in RESULTS if ok)
     total = len(RESULTS)

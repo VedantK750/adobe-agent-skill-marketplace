@@ -44,6 +44,10 @@ FETCH_BACKOFF = 0.6     # seconds, multiplied by attempt number
 WALL_CLOCK_BUDGET = 180  # seconds; crawling stops and we report what we have
 TYPE_QUOTA_SHARE = 0.4   # no single page type may exceed this share of the sample
 FETCH_BUDGET_FACTOR = 2.5  # cap total fetches at this multiple of max_pages
+# Largest HTML document we will parse or store. Applied once, before parsing:
+# each page is parsed four times, so an uncapped multi-megabyte response
+# multiplies straight into the runtime budget.
+MAX_HTML_CHARS = 400000
 
 SKIP_EXT = re.compile(
     r"\.(jpg|jpeg|png|gif|webp|svg|ico|css|js|zip|gz|mp4|mp3|avi|mov|"
@@ -328,8 +332,11 @@ def normalise(url):
     return up.urlunparse(p._replace(path=path or "/", query=up.urlencode(q)))
 
 
-def links_from(html, base_url):
+def links_from(html, base_url, parsed=None):
     """Internal + external links on a page, normalised and absolute.
+
+    `parsed` accepts a soup the caller has already built, so the crawler does
+    not parse the same document a second time purely to read its anchors.
 
     Parsed, not pattern-matched. An earlier regex required quoted href values
     (`href\\s*=\\s*["'](...)["']`), which silently returned zero links for any
@@ -345,7 +352,8 @@ def links_from(html, base_url):
     stray `<` in preceding attribute values.
     """
     out = []
-    for a in A.soup(html or "").find_all("a", href=True):
+    for a in (parsed if parsed is not None
+              else A.soup(html or "")).find_all("a", href=True):
         href = (a.get("href") or "").strip()
         if not href or href.startswith(("mailto:", "tel:", "javascript:", "#")):
             continue
@@ -538,7 +546,7 @@ def page_meta(html, url):
         block = (tag.string or tag.get_text() or "")
         jsonld.append(block[:200000])
 
-    return {
+    out = {
         "title": A.normalise_ws(s.title.get_text()) if s.title else None,
         "meta_description": meta(name="description"),
         "meta_robots": meta(name="robots"),
@@ -563,9 +571,23 @@ def page_meta(html, url):
             or any("breadcrumblist" in (raw or "").lower() for raw in jsonld)),
         "internal_links": 0,   # filled after crawl
         "outbound_links": [],  # filled below
-        "text": A.visible_text(html),
-        "body_text": A.main_text(html),
     }
+
+    # Anchors, read from this same tree and while it is still intact. Returned
+    # under a private key the crawler pops; it is not part of the snapshot.
+    out["_links"] = links_from(html, url, parsed=s)
+
+    # LAST, because it strips the tree in place. Every read of `s` above must
+    # already have happened -- asking afterwards whether the page has a <script>
+    # or a <nav> would get the wrong answer.
+    #
+    # This is the whole point of the refactor: these two texts used to come from
+    # two more parses of the same document, and links_from added a fourth. Four
+    # parses per page is what pushed one storefront to 674 seconds and zero
+    # pages kept. One parse, reused, costs the same reduction that truncating
+    # the document did -- without cutting any content out of it.
+    out["text"], out["body_text"] = A.both_texts_from(s)
+    return out
 
 
 # ---------------------------------------------------------------- main
@@ -659,6 +681,21 @@ def crawl(start_url, workdir, max_pages, delay, render):
             continue
         seen_finals.add(final)
 
+        # Parse the FULL response, store a capped copy.
+        #
+        # Truncating before parsing was tried and was wrong: it cut real <h1>,
+        # <main> and JSON-LD off the end of large documents, and the checks
+        # reading those fields roughly doubled their firing rate on a 180-site
+        # sample. A page is not less well built because it is long.
+        #
+        # The cost that truncation was trying to solve is real -- one storefront
+        # spent 674 seconds and kept zero pages -- but its cause was parsing the
+        # same document four times, not parsing it once. page_meta now parses
+        # once and derives everything from that single tree, which removes the
+        # cost with no content lost. MAX_HTML_CHARS bounds only what is written
+        # to the snapshot, so the file stays a sane size.
+        html = res["raw_html"]
+
         page = {
             "url": url,
             "final_url": res["final_url"],
@@ -671,17 +708,17 @@ def crawl(start_url, workdir, max_pages, delay, render):
             "headers": {k: v for k, v in res["headers"].items()
                         if k in ("x-robots-tag", "content-type", "cache-control",
                                  "last-modified", "content-encoding", "server")},
-            "raw_html": res["raw_html"][:400000],
+            "raw_html": html[:MAX_HTML_CHARS],
         }
         discovered_internal = []
-        if res["raw_html"]:
-            page.update(page_meta(res["raw_html"], res["final_url"]))
-            discovered = links_from(res["raw_html"], res["final_url"])
+        if html:
+            page.update(page_meta(html, res["final_url"]))
+            discovered = page.pop("_links", [])
             discovered_internal = [u for u in discovered if same_site(u, base)]
             page["internal_links"] = len(set(discovered_internal))
             page["outbound_links"] = sorted(
                 {u for u in discovered if not same_site(u, base)})[:40]
-        page["soft_404"] = bool(res["raw_html"]) and is_soft_404(page)
+        page["soft_404"] = bool(html) and is_soft_404(page)
         page["page_type"] = classify_page(page, base)
 
         # A 200 response that is not HTML (a plain-text CHANGES file, a PDF, an

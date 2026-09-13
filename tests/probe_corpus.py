@@ -4,11 +4,11 @@
 A full audit costs 20-130 seconds per site. A candidate list of a thousand
 consumer brands is always partly stale -- brands fold, rebrand, move domain or
 park -- and every dead entry burns three retries times a twelve-second timeout
-before the suite records the obvious. Probing first with one short request per
-host turns an hour of wasted budget into about a minute.
+before the suite records the obvious. Probing first turns an hour of wasted
+budget into about a minute.
 
-This is a corpus-maintenance tool, not part of the audit. It makes exactly one
-GET per host, honours nothing else, and records only whether a status came back.
+This is a corpus-maintenance tool, not part of the audit. It issues GETs only,
+at most two per host variant, and records only whether a status came back.
 
   python3 tests/probe_corpus.py --in tests/corpus-d2c.txt \
                                --out tests/corpus-d2c.live.txt
@@ -23,12 +23,15 @@ import concurrent.futures
 import os
 import re
 import sys
+import time
 import urllib.parse as up
 from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 TIMEOUT = 8
+PROBE_RETRIES = 1   # one retry: transient failures cost real brands
+PROBE_BACKOFF = 1.5 # seconds, multiplied by attempt number
 UA = ("brand-ai-readiness-audit-probe/1.0 (corpus liveness check; "
       "one request per host)")
 
@@ -83,25 +86,39 @@ def _variants(url):
 
 
 def probe(url):
+    """Is there a site here? Returns (url_that_worked, alive, reason).
+
+    Retried once per host variant, because a single transient failure must not
+    evict a real brand from the corpus. Two probes of this list minutes apart
+    returned 672 and 797 live -- a 120-site swing, with SSLError alone moving
+    152 to 32, entirely from a cold network rather than from anything about the
+    sites. A corpus that shrinks by 15% on a bad minute makes every firing rate
+    measured against it uncomparable, which is the one thing this corpus has to
+    avoid.
+    """
     import requests
     last = "error"
     for candidate in _variants(url):
-        try:
-            r = requests.get(candidate, timeout=TIMEOUT, allow_redirects=True,
-                             headers={"User-Agent": UA,
-                                      "Accept": "text/html,*/*;q=0.8"})
-            # Any HTTP status means a host answered -- including 403, which is
-            # itself an interesting audit subject (a bot filter refusing
-            # crawlers is a real discoverability defect, not a dead site). Only
-            # 404/410 on the home page means there is nothing here to audit.
-            if r.status_code in (404, 410):
-                last = "home page %d" % r.status_code
-                continue
-            # Report the spelling that worked, so the saved corpus is the one
-            # the audit suite should actually use.
-            return candidate, True, str(r.status_code)
-        except Exception as exc:
-            last = type(exc).__name__
+        for attempt in range(PROBE_RETRIES + 1):
+            try:
+                r = requests.get(candidate, timeout=TIMEOUT,
+                                 allow_redirects=True,
+                                 headers={"User-Agent": UA,
+                                          "Accept": "text/html,*/*;q=0.8"})
+                # Any HTTP status means a host answered -- including 403, which
+                # is itself an interesting audit subject (a bot filter refusing
+                # crawlers is a real discoverability defect, not a dead site).
+                # Only 404/410 on the home page means there is nothing to audit.
+                if r.status_code in (404, 410):
+                    last = "home page %d" % r.status_code
+                    break  # a real answer; try the other variant, not again
+                # Report the spelling that worked, so the saved corpus is the
+                # one the audit suite should actually use.
+                return candidate, True, str(r.status_code)
+            except Exception as exc:
+                last = type(exc).__name__
+                if attempt < PROBE_RETRIES:
+                    time.sleep(PROBE_BACKOFF * (attempt + 1))
     return url, False, last
 
 
