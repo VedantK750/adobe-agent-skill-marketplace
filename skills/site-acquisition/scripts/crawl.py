@@ -44,9 +44,8 @@ FETCH_BACKOFF = 0.6     # seconds, multiplied by attempt number
 WALL_CLOCK_BUDGET = 180  # seconds; crawling stops and we report what we have
 TYPE_QUOTA_SHARE = 0.4   # no single page type may exceed this share of the sample
 FETCH_BUDGET_FACTOR = 2.5  # cap total fetches at this multiple of max_pages
-# Largest HTML document we will parse or store. Applied once, before parsing:
-# each page is parsed four times, so an uncapped multi-megabyte response
-# multiplies straight into the runtime budget.
+# Largest HTML document written to the snapshot. Bounds file size only -- see
+# the note in crawl() on why it is not applied before parsing.
 MAX_HTML_CHARS = 400000
 
 SKIP_EXT = re.compile(
@@ -70,16 +69,12 @@ def session():
 def budgeted(deadline, timeout=DEFAULT_TIMEOUT, retries=FETCH_RETRIES):
     """Shrink a fetch's timeout and retry count to fit the time remaining.
 
-    The wall-clock budget used to be checked only *between* fetches, so a crawl
-    could pass the check at 179 seconds and then spend another 38 on one
-    request's timeout-and-retry tail. On a slow network that tail happened
-    repeatedly and pushed whole audits past the brief's five-minute ceiling --
-    seen on a 785-site run, where four sites blew the budget outright.
+    WALL_CLOCK_BUDGET is only checked between fetches, so without this a crawl
+    can pass the check with a second to spare and then spend another 38 on one
+    request's timeout-and-retry tail. Bounding each fetch by the time actually
+    left caps the overrun at one shortened request.
 
-    Bounding each fetch by the time actually left makes the budget a guarantee
-    rather than a hope: the crawl cannot overrun it by more than one shortened
-    request. Returns (timeout, retries), with retries dropped first because a
-    retry is a nice-to-have and finishing is not.
+    Returns (timeout, retries). Retries are dropped before the timeout is cut.
     """
     left = deadline - time.time()
     if left <= 0:
@@ -137,12 +132,9 @@ def fetch(sess, url, timeout=DEFAULT_TIMEOUT, retries=FETCH_RETRIES):
 def describe_exception(exc):
     """A transport error as a reader-facing string.
 
-    `"%s: %s" % (type(exc).__name__, exc)` is right most of the time and wrong
-    in a way that reaches the report: several urllib3 and requests exceptions
-    stringify to "None" or to empty, so the evidence read "First transport
-    error: ConnectionError: None" -- a Python artefact shown to someone who
-    just wants to know why their site could not be reached. Fall back to the
-    exception type alone, which is the part that carries meaning anyway.
+    Several urllib3 and requests exceptions stringify to "None" or to empty,
+    which reaches the report as "ConnectionError: None". Fall back to the
+    exception type alone, and trim the nested connection-pool wrapper.
     """
     if exc is None:
         return "no response"
@@ -335,21 +327,15 @@ def normalise(url):
 def links_from(html, base_url, parsed=None):
     """Internal + external links on a page, normalised and absolute.
 
-    `parsed` accepts a soup the caller has already built, so the crawler does
-    not parse the same document a second time purely to read its anchors.
+    `parsed` accepts a soup the caller already built, to avoid parsing the same
+    document twice just to read its anchors.
 
-    Parsed, not pattern-matched. An earlier regex required quoted href values
-    (`href\\s*=\\s*["'](...)["']`), which silently returned zero links for any
-    page written with unquoted attributes -- `<a href=/foo>`, valid HTML5 and
-    the house style of a good deal of hand-written and generated markup. The
-    failure was invisible in the worst way: the crawl simply ended after the
-    seed page, so every downstream check ran on a one-page sample and the report
-    looked merely thin rather than broken. Found on a live corpus run, where a
-    well-known blog with 209 anchors on its home page yielded 0 links.
-
-    A real parser also handles the rest of the family the regex got wrong:
-    attributes in single, double or no quotes, newlines inside the tag, and
-    stray `<` in preceding attribute values.
+    Must stay parser-based. A regex over `href="..."` misses unquoted
+    attributes (`<a href=/foo>`, valid HTML5), and the failure is silent: no
+    links means the crawl ends at the seed page and every check downstream runs
+    on a one-page sample, so the report looks thin rather than broken. The
+    parser also handles newlines inside the tag and stray `<` in earlier
+    attribute values.
     """
     out = []
     for a in (parsed if parsed is not None
@@ -577,15 +563,8 @@ def page_meta(html, url):
     # under a private key the crawler pops; it is not part of the snapshot.
     out["_links"] = links_from(html, url, parsed=s)
 
-    # LAST, because it strips the tree in place. Every read of `s` above must
-    # already have happened -- asking afterwards whether the page has a <script>
-    # or a <nav> would get the wrong answer.
-    #
-    # This is the whole point of the refactor: these two texts used to come from
-    # two more parses of the same document, and links_from added a fourth. Four
-    # parses per page is what pushed one storefront to 674 seconds and zero
-    # pages kept. One parse, reused, costs the same reduction that truncating
-    # the document did -- without cutting any content out of it.
+    # Must stay last: this strips the tree in place, so any read of `s` after it
+    # (does the page have a <script>, a <nav>?) would answer wrongly.
     out["text"], out["body_text"] = A.both_texts_from(s)
     return out
 
@@ -681,19 +660,11 @@ def crawl(start_url, workdir, max_pages, delay, render):
             continue
         seen_finals.add(final)
 
-        # Parse the FULL response, store a capped copy.
-        #
-        # Truncating before parsing was tried and was wrong: it cut real <h1>,
-        # <main> and JSON-LD off the end of large documents, and the checks
-        # reading those fields roughly doubled their firing rate on a 180-site
-        # sample. A page is not less well built because it is long.
-        #
-        # The cost that truncation was trying to solve is real -- one storefront
-        # spent 674 seconds and kept zero pages -- but its cause was parsing the
-        # same document four times, not parsing it once. page_meta now parses
-        # once and derives everything from that single tree, which removes the
-        # cost with no content lost. MAX_HTML_CHARS bounds only what is written
-        # to the snapshot, so the file stays a sane size.
+        # Analyse the full response; store a capped copy. The cap keeps the
+        # snapshot file a sane size and must not be applied before parsing:
+        # truncating mid-document drops <h1>, <main> and JSON-LD off long pages
+        # and the checks reading them then misfire. Cost is controlled by
+        # page_meta parsing once, not by shortening the input.
         html = res["raw_html"]
 
         page = {

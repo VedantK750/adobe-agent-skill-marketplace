@@ -236,43 +236,35 @@ diagnostic, and if it is not, it is a false positive with wide reach. A check
 that never fires anywhere is untested surface area. Both lists are printed and
 written to `SUMMARY.md`.
 
-That is not a hypothetical. Every defect in the list below was found by running
-the suite, and every fixture passed at the time each was found:
+The defects this catches are the ones fixtures cannot, because they only appear
+against markup nobody on the team wrote:
 
-| Found | Defect |
+| Class | Example |
 |---|---|
-| Small-sample claims | A one-page crawl asserted 9–12 site-wide findings, several `high`, from a single page of evidence |
-| Link extraction | A regex requiring quoted `href` returned zero links for valid-HTML5 unquoted attributes, silently capping those sites at one page |
-| Unreachable hosts | A dead origin was reported as "no robots.txt" + "no sitemap" — asserting facts about markup never seen |
-| `EN-NO-CTA` | Matched chrome-stripped text, so it missed "Add to cart" inside `<form>`; fired on ~half of all storefronts |
-| `EN-AUTOPLAY-MEDIA` | Fired on muted autoplay. 17 of 17 autoplaying elements in the corpus were muted, so every firing contradicted the check's own "unrequested sound" mechanism |
-| `MR-IFRAME-CONTENT` | 17 of 25 frames that tripped it were `googletagmanager.com`; the check was measuring "has analytics", not trapped content |
-| `AE-NO-DEFINITION` | Asserted "no definition" on pages too text-sparse to read, restating a readability defect as a content one |
-| Wall-clock budget | Checked only between fetches, so one request's retry tail could push an audit past the 5-minute ceiling |
-| Evidence hygiene | `ACC-NO-RESPONSE` rendered "ConnectionError: None" — a Python artefact shown to a reader |
-| Oversize pages | Each page was parsed **four times** (metadata, visible text, main text, links). One storefront spent **674s and kept zero pages**; parsing once takes 130s and keeps 10. Truncating before parsing looked like the fix and was not — it cut real `<h1>`, `<main>` and JSON-LD off long pages and roughly doubled `MR-NO-H1` and `MR-NO-MAIN-LANDMARK` |
-| Site/page type coupling | Commerce evidence at site level counted only `product` pages, so a storefront sampled at `/collections/` could read as `unknown`. Site type gates whole checks, so that silently changes what runs |
+| A check measuring a proxy, not its mechanism | `EN-AUTOPLAY-MEDIA` fired on *muted* autoplay — which cannot produce the unrequested sound its mechanism describes, and is muted precisely because browsers require it |
+| A check reading the wrong view of the page | `EN-NO-CTA` searched chrome-stripped text, missing "Add to cart" inside `<form>` on roughly half of all storefronts |
+| Infrastructure counted as content | `MR-IFRAME-CONTENT` was tripped mostly by tag-manager frames, making it a detector for "uses analytics" |
+| Absent evidence read as negative evidence | A site-wide claim asserted from a one-page crawl; "no definition" asserted on a page too sparse to read |
+| Silent extraction failure | A regex over `href="..."` returned zero links for valid unquoted attributes, capping those sites at one page with no error |
+| Cost that only shows at scale | Each page was parsed four times, which on multi-megabyte documents exceeded the runtime budget outright |
 
-Several came specifically from the D2C corpus, and they are the reason it
-exists: muted hero video, tag-manager iframes, form-wrapped cart buttons and
-client-rendered storefronts are all but universal on commerce sites and all but
-absent from the documentation and publisher sites a general corpus is made of.
+Several are specific to commerce markup — muted hero video, tag-manager
+iframes, form-wrapped cart buttons, client-rendered storefronts — which is why
+`corpus-d2c.txt` exists alongside the general one. None of them is visible on a
+site you designed yourself.
 
 ### Read crawl depth before believing any rate
 
-The suite reports median pages crawled next to every firing rate, and warns
-when depth collapses. That warning exists because the confounder is genuinely
-deceptive: nearly every check generalises from a page sample and stays silent
-below three pages, so a shallow crawl lowers rates across the board and looks
-exactly like a detection improvement. It also moves site type — with only a
-home page sampled there is no product evidence, so storefronts read as
-`unknown`.
+The suite reports median pages crawled next to every firing rate and warns when
+depth collapses, because depth is the confounder under every aggregate here.
+Nearly every check generalises from a page sample and stays silent below three
+pages, so a shallow crawl lowers rates across the board and reads as a
+detection improvement. It also moves site type: with only a home page sampled
+there is no product evidence, so storefronts classify as `unknown`.
 
-Running this corpus four times in a few hours drew rate limiting from shared
-commerce CDNs (robots.txt answering 403, 429, 420) and median depth fell from
-10 pages to 1. The resulting `ecommerce` 370 → 158 shift looked precisely like
-a classifier regression and was very nearly "fixed" as one. Depth is the first
-thing to rule out, not the last.
+Depth collapses for mundane reasons — repeated runs against the same corpus
+draw rate limiting from shared CDNs, which shows up as robots.txt answering
+403, 429 or 420. Rule depth out before concluding anything about a check.
 
 Two corpora ship. `tests/corpus.txt` is a compact mixed set for quick runs.
 `tests/corpus-d2c.txt` is a ~900-entry set weighted toward direct-to-consumer
@@ -289,7 +281,7 @@ suite three retries before it learns anything. Probe first:
 python3 tests/probe_corpus.py --in  tests/corpus-d2c.txt \
                               --out tests/corpus-d2c.live.txt
 python3 tests/live_suite.py --corpus tests/corpus-d2c.live.txt \
-                            --workers 20 --max-pages 10
+                            --workers 8 --max-pages 10
 ```
 
 ### Brief compliance

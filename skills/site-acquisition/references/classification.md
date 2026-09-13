@@ -30,16 +30,15 @@ causes a reader to discount the other findings too.
 A path segment of `collections` or `category` is not a weak guess — it is the
 site stating the page's role. Structural evidence may only *refine* it.
 
-This distinction was learned the expensive way. Storefront grids show a price
-on every tile and, on most themes, a quick-add control on every tile too. A
-shared "has cart language or has prices → product" rule therefore promoted
-every `/collections/` page to `product`, and the structured-data check then
-reported "no Product schema" on a listing — which correctly has none, because
-forty items is an `ItemList`, not a `Product`. Since `/collections/` is the
-default path of the most widely used commerce platform, this misfired on a
-large share of exactly the sites the audit is most often pointed at.
+Storefront grids show a price on every tile and, on most themes, a quick-add
+control on every tile too. A shared "has cart language or has prices →
+product" rule therefore promotes every `/collections/` page to `product`, and
+the structured-data check then asks for Product schema on a listing, which
+correctly carries `ItemList` instead. `/collections/` is the default path of
+the most widely used commerce platform, so this misfires across a large share
+of the sites the audit is most often pointed at.
 
-The rule now runs in both directions and each needs decisive evidence to move:
+The rule runs in both directions and each needs decisive evidence to move:
 
 - a `category` URL becomes `product` only where the page is genuinely a single
   item — cart control, few onward links, few sections;
@@ -67,28 +66,21 @@ repeat "add to cart" and a blog's `/category/` archives do not — without that
 guard the same rule would sweep every WordPress blog into `ecommerce`.
 `tests/run_tests.py` asserts both directions.
 
-### A warning about how this was nearly mis-diagnosed
+### Rule out crawl depth before blaming the classifier
 
-A 785-site run showed `ecommerce` falling 370 → 158 and `unknown` rising
-293 → 514, immediately after the `/collections/` page-type correction landed.
-The obvious reading — the page-type fix collapsed `product_share` — was wrong.
+A shift in the site-type distribution between two corpus runs is not evidence
+about classification until depth is excluded. With only a home page sampled
+there is no product or category evidence to classify from, so `unknown` is the
+correct answer — and a drop in depth moves the whole distribution at once,
+which looks exactly like a classifier regression.
 
-The real cause was crawl depth. On the *same* 407 sites at the *same*
-concurrency, median pages crawled fell from 10 to 1, and 143 sites dropped from
-five or more pages to one. With only a home page sampled there is no product or
-category evidence to classify from, so `unknown` is the correct answer. The
-cause of *that* was cumulative rate limiting: the corpus had been run four
-times in a few hours, and a spot check found 4 of 24 sites answering robots.txt
-with 403, 429, 420 or 202 — bot defences, all of them on the one-page sites.
+Depth itself collapses for mundane reasons. Repeated runs against the same
+corpus draw rate limiting from shared CDNs, which surfaces as robots.txt
+answering 403, 429 or 420 and one-page crawls across unrelated hosts.
 
-Two lessons worth more than the fix:
-
-- **A site-type distribution shift is not evidence about the classifier until
-  crawl depth is ruled out.** Depth is the confounder; check it first.
-- **Aggregate comparisons across runs are only valid if the runs sampled
-  comparably.** `tests/live_suite.py` now reports median crawl depth and warns
-  when it collapses, because that silently invalidates every rate comparison
-  drawn from the run.
+`tests/live_suite.py` reports median crawl depth alongside every firing rate
+and warns when it collapses, since that invalidates any comparison drawn from
+the run.
 
 ## Generalisation rule
 

@@ -21,7 +21,7 @@ off-site half needs a search capability.
 ## The mechanism
 Two ideas from the background material. A fact repeated consistently across
 unrelated sources is treated as far more reliable than one that lives in a
-single place — a claim stated only by the party it benefits is fragile. And
+single place; a claim stated only by the party it benefits is fragile. And
 when several entities share a name, they are conflated unless something
 clearly distinguishes them, so facts get attributed to the wrong organisation.
 
