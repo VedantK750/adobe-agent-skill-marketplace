@@ -880,6 +880,72 @@ def run():
            and meta.get("_links") == ["https://example.com/x"],
            "the single parse still yields text, body text and links")
 
+    # -- Proactive recommendations are gated on evidence --------------------
+    # They used to be a fixed list appended verbatim to every report, so a
+    # documentation site was told to convert image-rendered price lists into
+    # HTML tables and a five-page brochure was told to publish transcripts for
+    # video it does not have. Advice that plainly does not apply costs the same
+    # credibility as a false positive: it teaches the reader to skim.
+    print("\nproactive recommendation gating:")
+    import importlib.util as _ilu2
+    _spec = _ilu2.spec_from_file_location(
+        "cr_compose", os.path.join(ROOT, "skills", "audit-orchestrator",
+                                   "scripts", "compose_report.py"))
+    cr = _ilu2.module_from_spec(_spec)
+    _spec.loader.exec_module(cr)
+
+    def pctx(**kw):
+        base = {"site_type": "unknown", "page_types": set(), "page_count": 10,
+                "declared_types": set(), "has_media": False, "image_count": 0,
+                "has_products": False, "has_articles": False,
+                "has_docs": False, "has_org": False}
+        base.update(kw)
+        return base
+
+    def ids_for(**kw):
+        return [r["id"] for r in cr.select_proactive(pctx(**kw))]
+
+    shop = ids_for(site_type="ecommerce", has_products=True,
+                   page_types={"home", "product"},
+                   declared_types={"product", "offer"}, image_count=40)
+    docs = ids_for(site_type="documentation", has_docs=True,
+                   page_types={"home", "documentation"}, image_count=3)
+    pub = ids_for(site_type="publisher", has_articles=True, has_media=True,
+                  page_types={"home", "article"}, image_count=25)
+    local = ids_for(site_type="local-business",
+                    page_types={"home", "contact"}, image_count=8)
+    tiny = ids_for(site_type="portfolio", page_count=2, page_types={"home"})
+
+    expect("P-011" in shop and "P-012" in shop,
+           "a storefront gets the commerce-terms and review recommendations")
+    expect("P-011" not in docs and "P-012" not in docs,
+           "a documentation site is not told to mark up offers or reviews")
+    expect("P-014" in docs and "P-014" not in shop,
+           "version-pinning advice goes to docs sites only")
+    expect("P-015" in pub and "P-015" not in shop,
+           "author-identity advice goes to editorial sites only")
+    expect("P-013" in local and "P-013" not in docs,
+           "hours/location advice goes to place-based businesses only")
+    expect("P-006" not in docs and "P-006" in pub,
+           "transcripts are suggested only where media was actually seen")
+    expect("P-005" not in docs,
+           "image-to-table advice needs enough images to be plausible")
+    expect(len(tiny) >= 3 and "P-002" not in tiny,
+           "a two-page site still gets universal advice but not site-wide "
+           "prose-pattern advice (got %s)" % tiny)
+
+    # Ids must mean the same thing in every report, so gaps are expected and
+    # renumbering is not: a reader comparing two audits relies on it.
+    expect(shop == sorted(shop) and docs == sorted(docs),
+           "recommendation ids stay in stable ascending order")
+    expect(all(r.get("id") and r.get("title") and r.get("rationale")
+               and r.get("priority") in ("critical", "high", "medium", "low")
+               and "when" not in r
+               for r in cr.select_proactive(pctx(site_type="ecommerce",
+                                                 has_products=True))),
+           "every emitted recommendation is schema-shaped and carries no "
+           "internal predicate")
+
     # -- Summary ------------------------------------------------------------
     passed = sum(1 for ok, _ in RESULTS if ok)
     total = len(RESULTS)

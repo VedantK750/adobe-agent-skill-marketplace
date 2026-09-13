@@ -50,6 +50,19 @@ positive for a miss.
 stating *why* the defect breaks retrieval or engagement, not merely that
 something is missing. A fix that is not traceable to a mechanism is a guess.
 
+Advice is gated on the same evidence as the findings. The proactive
+recommendations — the improvements worth making where no defect was detected —
+are selected against what the site actually turned out to be, not appended as a
+fixed list. A documentation site is not told to mark up offers and reviews; a
+site with no video is not told to publish transcripts; a two-page brochure is
+not lectured about a site-wide prose pattern. Instead each gets the advice that
+answers the questions its visitors actually ask: commerce terms and review
+markup for a storefront, version-pinning for documentation, author identities
+for a publisher, hours and service area for a place-based business. Irrelevant
+advice costs exactly what a false positive costs — it teaches the reader to
+skim the section. Ids are stable across reports, so a suppressed recommendation
+leaves a gap rather than renumbering the rest.
+
 Underpinning all three is a **representative sample**. Conditional checks are
 only as good as the pages they see, so the crawler works to sample the whole
 site rather than one corner of it: sitemap URLs are interleaved across sections
@@ -117,8 +130,8 @@ context is a common and important combination.
 3. **Compose** — `compose_report.py` computes severity centrally (see
    `skills/audit-orchestrator/references/severity-model.md`), collapses
    findings that share a root cause, assigns `F-NNN` ids in deterministic
-   order, sorts by severity then ascending effort, and appends ten proactive
-   recommendations.
+   order, sorts by severity then ascending effort, and selects the proactive
+   recommendations that apply to this site.
 4. **Validate** — `validate_report.py` checks the report against the schema,
    including cross-field consistency the schema cannot express. It uses
    `jsonschema` when installed and a built-in check when not.
@@ -136,7 +149,8 @@ Every field the brief requires, plus extensions that carry the reasoning:
 - `prevalence` — affected over sampled, for the relevant page type
 - `confidence` — and it only ever lowers severity, never raises it
 - `verification` — how to confirm the fix worked, per finding
-- `proactive_recommendations` — improvements beyond the detected defects
+- `proactive_recommendations` — improvements beyond the detected defects,
+  selected against what the site actually is
 - `not_applicable` — checks that ran and correctly did not apply
 - `inconclusive` — checks that could not be evaluated on this run
 
