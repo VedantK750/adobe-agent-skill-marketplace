@@ -11,6 +11,7 @@ implemented once, below.
 import argparse
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.join(
@@ -102,9 +103,75 @@ def dedupe(findings):
     return [f for f in findings if f["check_id"] not in drop]
 
 
+def proactive_context(snap):
+    """What the site actually is, for deciding which advice is worth giving.
+
+    Proactive recommendations used to be a fixed list appended verbatim to
+    every report, which meant a documentation site was told to convert
+    image-rendered price lists into HTML tables and a five-page brochure was
+    told to publish video transcripts it has no video for. Advice that plainly
+    does not apply is worse than no advice: it is the same credibility problem
+    as a false positive, and it teaches the reader to skim the section.
+
+    Everything here is derived from the evidence snapshot, using the same
+    site-neutral signals the checks use -- never a string tied to a particular
+    site or vendor.
+    """
+    pages = A.ok_pages(snap)
+    page_types = {p.get("page_type") for p in pages}
+
+    declared = set()
+    for p in pages:
+        for raw in p.get("jsonld_raw") or []:
+            declared.update(t.lower() for t in
+                            re.findall(r'"@type"\s*:\s*"([^"]+)"', raw or ""))
+
+    media = 0
+    images = 0
+    for p in pages:
+        html = p.get("raw_html") or ""
+        media += len(re.findall(r"(?is)<(?:video|audio)\b", html))
+        # Embedded players carry the same substance as a local <video>.
+        media += len(re.findall(r"(?i)(?:youtube|youtu\.be|vimeo|wistia|"
+                                r"brightcove|jwplayer)", html))
+        images += len(p.get("images") or [])
+
+    return {
+        "site_type": snap.get("site_type", "unknown"),
+        "page_types": page_types,
+        "page_count": len(pages),
+        "declared_types": declared,
+        "has_media": media > 0,
+        "image_count": images,
+        "has_products": "product" in page_types,
+        "has_articles": "article" in page_types,
+        "has_docs": "documentation" in page_types,
+        "has_org": bool(declared & {"organization", "localbusiness", "store",
+                                    "onlinestore", "corporation"}),
+    }
+
+
+def select_proactive(ctx):
+    """The recommendations that apply to this site, in declared order.
+
+    Ids are stable across reports -- P-004 means the same thing everywhere --
+    so a suppressed recommendation leaves a gap rather than renumbering the
+    rest. That matters when two audits are read side by side.
+    """
+    out = []
+    for rec in PROACTIVE:
+        when = rec.get("when")
+        if when is not None and not when(ctx):
+            continue
+        out.append({k: v for k, v in rec.items() if k != "when"})
+    return out
+
+
 PROACTIVE = [
     {
         "id": "P-001",
+        # Every brand benefits from one authoritative plain-text statement.
+        "when": lambda c: True,
         "title": "Publish a canonical facts page and an llms.txt",
         "rationale": "Gives every consumer one authoritative, plain-text "
                      "source for the brand's core claims, so corroboration "
@@ -124,6 +191,8 @@ PROACTIVE = [
     },
     {
         "id": "P-002",
+        # Needs enough content pages for a site-wide prose pattern to mean anything.
+        "when": lambda c: c['page_count'] >= 3,
         "title": "Adopt the answer-block pattern site-wide",
         "rationale": "A question-shaped heading followed by a short, "
                      "self-contained answer is the most reliably quotable "
@@ -140,6 +209,8 @@ PROACTIVE = [
     },
     {
         "id": "P-003",
+        # Anchors matter where there is sectioned prose to point a citation at.
+        "when": lambda c: c['has_articles'] or c['has_docs'] or c['page_count'] >= 8,
         "title": "Add stable heading anchors across the site",
         "rationale": "Lets a citation point at the exact section that answers "
                      "the question rather than at the page, which makes the "
@@ -151,6 +222,8 @@ PROACTIVE = [
     },
     {
         "id": "P-004",
+        # Entity disambiguation applies to any brand with a name.
+        "when": lambda c: True,
         "title": "Build the entity graph: sameAs plus a Wikidata presence",
         "rationale": "Anchors the brand against similarly named entities. "
                      "Without a distinguishing anchor, systems conflate "
@@ -165,6 +238,8 @@ PROACTIVE = [
     },
     {
         "id": "P-005",
+        # Only worth saying where there are enough images to plausibly carry data.
+        "when": lambda c: c['image_count'] >= 10,
         "title": "Convert image-rendered data into HTML tables",
         "rationale": "Specification sheets, price lists and charts delivered "
                      "as images carry facts that no text extractor can read, "
@@ -177,6 +252,8 @@ PROACTIVE = [
     },
     {
         "id": "P-006",
+        # Transcripts are advice for sites that actually publish video or audio.
+        "when": lambda c: c['has_media'],
         "title": "Publish transcripts for video and audio",
         "rationale": "Converts substance that currently exists only in "
                      "non-text media into extractable, quotable text.",
@@ -187,6 +264,8 @@ PROACTIVE = [
     },
     {
         "id": "P-007",
+        # Off-site agreement matters for every brand.
+        "when": lambda c: True,
         "title": "Run a corroboration programme for the canonical facts",
         "rationale": "A claim that appears only on the brand's own site is "
                      "treated as fragile. Agreement across unrelated domains "
@@ -202,6 +281,8 @@ PROACTIVE = [
     },
     {
         "id": "P-008",
+        # Comparison and alternatives pages answer buying questions; an editorial archive is not where that lands.
+        "when": lambda c: c['site_type'] in ('ecommerce', 'software', 'local-business') or c['has_products'],
         "title": "Add comparison, alternatives and glossary pages",
         "rationale": "Comparative and definitional questions are among the "
                      "most common asked of assistants, and pages built to "
@@ -214,6 +295,8 @@ PROACTIVE = [
     },
     {
         "id": "P-009",
+        # A changelog is advice for sites whose content actually changes in versioned, datable ways.
+        "when": lambda c: c['has_articles'] or c['has_docs'] or c['site_type'] == 'software',
         "title": "Maintain a changelog with honest dateModified values",
         "rationale": "Gives a defensible freshness signal that survives "
                      "scrutiny, unlike a build-time timestamp applied to every "
@@ -225,6 +308,8 @@ PROACTIVE = [
     },
     {
         "id": "P-010",
+        # Every brand sends email; this is the one recommendation the crawl cannot evidence, carried deliberately (appendix item F).
+        "when": lambda c: True,
         "title": "Front-load readable text in outbound email",
         "rationale": "Inbox summarisers build from message text. Substance "
                      "carried by images, or buried beneath filler, is dropped "
@@ -234,6 +319,147 @@ PROACTIVE = [
         "steps": ["Put the key message in the first readable lines as text.",
                   "Never carry the core offer in an image alone.",
                   "Keep preheader text meaningful rather than decorative."],
+    },
+
+    # -- Conditional, and the reason gating was worth building ---------------
+    # These only reach the reports they belong in. Each answers a question
+    # assistants are actually asked about that kind of site, and each is the
+    # sort of thing a generic SEO checklist does not carry.
+    {
+        "id": "P-011",
+        # A storefront, by page type or by declared schema.
+        "when": lambda c: c['has_products'] or c['site_type'] == 'ecommerce'
+        or bool(c['declared_types'] & {'product', 'offer'}),
+        "title": "State the commerce terms as data, not only in prose",
+        "rationale": "The questions assistants are asked about a product are "
+                     "rarely about the product: they are \"can I return it\", "
+                     "\"does it ship to me\", \"is that price current\", \"is "
+                     "it in stock\". Those answers usually exist only in a "
+                     "policy page or a shipping widget, so an assistant either "
+                     "omits them or reconstructs them from stale prose. "
+                     "schema.org carries every one of them as an explicit "
+                     "property, and a stated return window is quotable in a "
+                     "way a linked policy page is not.",
+        "priority": "high",
+        "effort": "medium",
+        "steps": [
+            "On each Offer, populate priceCurrency, price, availability and "
+            "priceValidUntil, so a quoted price carries its own expiry.",
+            "Attach hasMerchantReturnPolicy with the return window, who pays "
+            "return shipping, and the refund method.",
+            "Attach shippingDetails with destinations, cost and delivery "
+            "times rather than leaving them to a checkout-time surprise.",
+            "Mirror the same facts in one short readable paragraph on the "
+            "product page: markup and prose agreeing is what makes either "
+            "trustworthy.",
+        ],
+        "expected_impact": "Assistants can answer the pre-purchase questions "
+                           "that decide the sale, instead of sending the "
+                           "visitor to find a policy page.",
+    },
+    {
+        "id": "P-012",
+        # Products present but no review markup anywhere.
+        "when": lambda c: (c['has_products']
+                           or c['site_type'] == 'ecommerce')
+        and not (c['declared_types'] & {'aggregaterating', 'review'}),
+        "title": "Expose ratings and reviews as structured data",
+        "rationale": "Comparative questions -- \"which is better\", \"is it "
+                     "worth it\" -- are answered from whatever evaluative "
+                     "signal is machine-readable. Reviews rendered by a "
+                     "third-party widget are usually injected after load and "
+                     "carry no markup, so a brand with thousands of good "
+                     "reviews can look unrated next to a competitor with a "
+                     "hundred marked-up ones.",
+        "priority": "medium",
+        "effort": "medium",
+        "steps": [
+            "Emit AggregateRating on the product, with ratingValue, "
+            "reviewCount and the scale bounds.",
+            "Render at least a few review bodies into the server HTML rather "
+            "than leaving every one to the widget's JavaScript.",
+            "Never mark up ratings the page does not display -- markup that "
+            "contradicts the page is worse than none.",
+        ],
+        "expected_impact": "The brand carries an evaluative signal into "
+                           "comparisons instead of being omitted from them.",
+    },
+    {
+        "id": "P-013",
+        # Place-based business.
+        "when": lambda c: c['site_type'] == 'local-business'
+        or 'contact' in c['page_types'],
+        "title": "Publish hours, location and service area as text and markup",
+        "rationale": "\"Open now\", \"near me\" and \"do they cover my area\" "
+                     "are resolved from structured opening hours and address, "
+                     "not from a map embed or an image of a storefront sign. "
+                     "An iframe map is invisible to an extractor, and hours "
+                     "drawn in an image are invisible to everything.",
+        "priority": "medium",
+        "effort": "low",
+        "steps": [
+            "Emit LocalBusiness with address, geo, telephone, "
+            "openingHoursSpecification and areaServed.",
+            "Repeat the same address and hours as plain text near the top of "
+            "the contact page, formatted identically to the listings.",
+            "Keep that wording byte-identical across the site and every "
+            "external directory: a mismatched suite number reads as two "
+            "different businesses.",
+        ],
+        "expected_impact": "The business becomes answerable to proximity and "
+                           "availability questions, which is most of local "
+                           "intent.",
+    },
+    {
+        "id": "P-014",
+        # Documentation, where the version quoted back matters.
+        "when": lambda c: c['has_docs'] or c['site_type'] == 'documentation',
+        "title": "Make the current version obvious to a machine",
+        "rationale": "Documentation accumulates versions, and an assistant "
+                     "that retrieves a superseded page quotes superseded "
+                     "instructions with full confidence. Nothing in the page "
+                     "text usually says which version it is, so the mistake is "
+                     "invisible to the reader and blamed on the product.",
+        "priority": "medium",
+        "effort": "medium",
+        "steps": [
+            "State the version in the page's own text, not only in a sidebar "
+            "selector rendered by script.",
+            "Point every archived version's canonical at the current page "
+            "where the content is unchanged, and leave it self-referential "
+            "where it genuinely differs.",
+            "Put the current docs on a stable /latest/ path and link it from "
+            "each versioned page.",
+            "Date each page with dateModified so recency can be compared "
+            "across versions.",
+        ],
+        "expected_impact": "Answers quote the version the reader is actually "
+                           "running.",
+    },
+    {
+        "id": "P-015",
+        # Editorial sites, where authorship is the trust signal.
+        "when": lambda c: c['has_articles'] or c['site_type'] == 'publisher',
+        "title": "Give authors real, linkable identities",
+        "rationale": "Attribution is one of the few quality signals available "
+                     "without judging the content itself. A byline that is "
+                     "plain text names nobody a machine can resolve; an author "
+                     "with a page, credentials and sameAs links to their "
+                     "professional profiles is an entity whose expertise can "
+                     "be weighed and cited.",
+        "priority": "medium",
+        "effort": "medium",
+        "steps": [
+            "Give each author a page carrying their credentials, beat and "
+            "contact, marked up as Person.",
+            "Link Article.author to that page by URL rather than repeating a "
+            "bare name string.",
+            "Add sameAs from the author page to their external professional "
+            "profiles.",
+        ],
+        "expected_impact": "Content gains an attributable, checkable source, "
+                           "which is what separates a citable article from an "
+                           "anonymous one.",
     },
 ]
 
@@ -314,7 +540,7 @@ def compose(workdir, out_path):
             },
         },
         "findings": out,
-        "proactive_recommendations": PROACTIVE,
+        "proactive_recommendations": select_proactive(proactive_context(snap)),
         "not_applicable": sorted(na, key=lambda x: x["check_id"]),
         "inconclusive": sorted(unknown, key=lambda x: x["check_id"]),
     }

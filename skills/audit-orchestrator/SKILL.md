@@ -50,8 +50,8 @@ areas are never touched, and every URL is fetched exactly once.
 
 4. **Compose.** Run `scripts/compose_report.py`. It computes severity
    centrally (see `references/severity-model.md`), de-duplicates findings that
-   share a root cause, assigns `F-NNN` ids in deterministic order, and appends
-   the proactive recommendations.
+   share a root cause, assigns `F-NNN` ids in deterministic order, and selects
+   the proactive recommendations that apply to this site.
 
 5. **Validate.** Run `scripts/validate_report.py`. Do not present a report that
    fails validation; fix the fragment that caused it and recompose.
@@ -93,6 +93,12 @@ arrays that matter as much as the findings themselves:
 
 Recording both is what distinguishes a check that stayed silent deliberately
 from one that missed something. Never delete them to make a report look cleaner.
+
+`proactive_recommendations` are the improvements worth making where no defect
+was found, and they are selected against what the site turned out to be rather
+than appended as a fixed list — a documentation site is not told to mark up
+offers, a site with no video is not told to publish transcripts. Their ids are
+stable across reports, so gaps in the sequence are expected and meaningful.
 
 ## Interpreting severity
 `critical` is reserved for defects that break the retrieval pipeline outright:
