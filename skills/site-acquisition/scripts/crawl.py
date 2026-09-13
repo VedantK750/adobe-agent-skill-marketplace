@@ -509,6 +509,21 @@ def page_meta(html, url):
         "forms": len(s.find_all("form")),
         "has_main": bool(s.find("main") or s.find(attrs={"role": "main"})),
         "has_nav": bool(s.find("nav") or s.find(attrs={"role": "navigation"})),
+        # Computed here, on the FULL document, because `raw_html` is truncated
+        # before it reaches the snapshot. Large commerce pages routinely carry
+        # megabytes of inlined JSON state ahead of the header markup, so a
+        # search box can sit well past the truncation point; scanning the
+        # stored HTML downstream would then report "no on-site search" on a
+        # site that plainly has one.
+        "has_search": bool(
+            s.find("input", attrs={"type": re.compile(r"^search$", re.I)})
+            or s.find(attrs={"role": re.compile(r"^search$", re.I)})
+            or s.find("input", attrs={"name": re.compile(r"^q$", re.I)})
+            or s.find(attrs={"placeholder": re.compile("search", re.I)})),
+        # Same reason as has_search: decided on the full document, not the
+        # truncated copy stored in the snapshot.
+        "has_autoplay": bool(
+            s.find(["video", "audio"], attrs={"autoplay": True})),
         "has_breadcrumb": bool(
             s.find(attrs={"class": re.compile("breadcrumb", re.I)})
             or s.find(attrs={"aria-label": re.compile("breadcrumb", re.I)})

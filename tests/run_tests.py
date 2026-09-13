@@ -610,6 +610,82 @@ def run():
     expect(_classify.classify_page(both, "https://shop.example.com/") == "product",
            "a declared Product outranks a co-declared FAQPage")
 
+    # -- Truncated-evidence regressions --------------------------------------
+    # Found by auditing misen.com: the snapshot stores only the first 400 000
+    # characters of each page, and that store carried megabytes of inlined
+    # product JSON before its header markup, so the site's search box sat at
+    # offset ~2.3 M. A check scanning the STORED html therefore saw no search
+    # input and reported "a large site offers no on-site search" about a site
+    # that has one. The crawler now decides these on the full document and
+    # stores the verdict as a flag; the analyser must trust the flag.
+    def run_engagement(snapshot):
+        wd = os.path.join(WORK, "unit-engagement")
+        if os.path.exists(wd):
+            _sh.rmtree(wd)
+        os.makedirs(wd)
+        with open(os.path.join(wd, "snapshot.json"), "w") as fh:
+            json.dump(snapshot, fh)
+        subprocess.run(
+            [sys.executable, os.path.join(ROOT, "skills", "engagement-audit",
+                                          "scripts", "analyze.py"),
+             "--workdir", wd], capture_output=True)
+        with open(os.path.join(wd, "fragments", "engagement-audit.json")) as fh:
+            frag = json.load(fh)
+        _sh.rmtree(wd, ignore_errors=True)
+        return {f["check_id"] for f in frag["findings"]}
+
+    def big_page(url, has_search, has_autoplay=False):
+        # raw_html deliberately carries NO search/autoplay markup, standing in
+        # for a document whose real markup fell beyond the truncation point.
+        p = page(url, text="Body copy with enough words to be substantive here.")
+        p.update({"page_type": "listing", "raw_html": "<html><body>" + ("x" * 200)
+                  + "</body></html>", "has_search": has_search,
+                  "has_autoplay": has_autoplay, "internal_links": 8,
+                  "bytes": 4_900_000, "elapsed_ms": 200, "has_nav": True,
+                  "viewport": "width=device-width", "iframes": []})
+        return p
+
+    def big_snap(has_search, has_autoplay=False):
+        return {
+            "site": "shop.example.com", "base_url": "https://shop.example.com/",
+            "audited_at": "2026-01-01T00:00:00Z", "site_type": "ecommerce",
+            "render_mode": "static-only", "render_status": "disabled-by-flag",
+            "pages": [big_page("https://shop.example.com/p/%d" % i, has_search,
+                               has_autoplay) for i in range(20)],
+        }
+
+    expect("EN-NO-SITE-SEARCH" not in run_engagement(big_snap(True)),
+           "search found beyond the truncation point does NOT fire "
+           "EN-NO-SITE-SEARCH")
+    expect("EN-NO-SITE-SEARCH" in run_engagement(big_snap(False)),
+           "a site genuinely without search still fires EN-NO-SITE-SEARCH")
+    expect("EN-AUTOPLAY-MEDIA" in run_engagement(
+               big_snap(True, has_autoplay=True)),
+           "autoplay beyond the truncation point is still detected")
+    expect("EN-AUTOPLAY-MEDIA" not in run_engagement(big_snap(True)),
+           "a site without autoplay does NOT fire EN-AUTOPLAY-MEDIA")
+
+    # The crawler must set these flags from the full document, not the copy it
+    # stores. This pins the mechanism itself, independently of any analyser.
+    import crawl as _crawl
+    huge = ("<html><head><title>T</title></head><body>"
+            + "<span>%s</span>" % ("y" * 500000)
+            + '<form role="search"><input type="search" name="q" '
+              'placeholder="Search products"></form>'
+            + '<video autoplay muted src="/v.mp4"></video>'
+            + "</body></html>")
+    meta_full = _crawl.page_meta(huge, "https://shop.example.com/")
+    expect(meta_full.get("has_search") is True,
+           "crawler detects a search box lying past 400k chars")
+    expect(meta_full.get("has_autoplay") is True,
+           "crawler detects autoplay lying past 400k chars")
+    plain = _crawl.page_meta("<html><body><p>No search here.</p></body></html>",
+                             "https://shop.example.com/")
+    expect(plain.get("has_search") is False,
+           "crawler reports no search when the document truly has none")
+    expect(plain.get("has_autoplay") is False,
+           "crawler reports no autoplay when the document truly has none")
+
     # -- Actionability invariants -------------------------------------------
     # The fix is the product. A finding an author cannot act on is a complaint,
     # so these assert the properties that make a remedy usable: it says WHERE

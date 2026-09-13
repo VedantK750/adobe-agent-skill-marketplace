@@ -256,7 +256,9 @@ def run(workdir):
         f.na("EN-NO-CTA", "No conversion-relevant page types detected.")
 
     # -- 6. Arrival interruptions -------------------------------------------
-    autoplay = [p for p in pages if AUTOPLAY_RE.search(p.get("raw_html") or "")]
+    autoplay = [p for p in pages
+                if (p["has_autoplay"] if p.get("has_autoplay") is not None
+                    else bool(AUTOPLAY_RE.search(p.get("raw_html") or "")))]
     if autoplay:
         f.finding(
             "EN-AUTOPLAY-MEDIA",
@@ -345,7 +347,13 @@ def run(workdir):
 
     # -- 8. On-site search ---------------------------------------------------
     if len(pages) >= 15:
-        has_search = any(SEARCH_RE.search(p.get("raw_html") or "") for p in pages)
+        # Prefer the flag the crawler computed on the untruncated document; fall
+        # back to scanning stored HTML only for snapshots taken before that flag
+        # existed. Scanning stored HTML alone under-detects: it is truncated.
+        has_search = any(
+            p["has_search"] if p.get("has_search") is not None
+            else bool(SEARCH_RE.search(p.get("raw_html") or ""))
+            for p in pages)
         if not has_search:
             f.finding(
                 "EN-NO-SITE-SEARCH",
