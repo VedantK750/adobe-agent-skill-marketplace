@@ -1,5 +1,20 @@
+# Required. The audit does not run without these.
 requests>=2.28.0
 beautifulsoup4>=4.11.0
+
+# Optional. Each improves the audit; none is needed for it to run or to be
+# correct, and the marketplace degrades honestly without them rather than
+# guessing. Install failures here (lxml is a compiled package and does not
+# always have a wheel for a given platform) are safe to ignore.
+#
+#   lxml        a faster, more tolerant HTML parser. Without it BeautifulSoup
+#               falls back to the stdlib parser and everything still works.
+#   jsonschema  full JSON Schema validation of the report. Without it
+#               validate_report.py runs an equivalent built-in check of the
+#               fields the brief requires.
+#   playwright  headless rendering, for the JS render-gap check. Without it
+#               that one check records `inconclusive` saying no browser is
+#               installed, and a static-HTML proxy check runs instead.
 lxml>=4.9.0
 jsonschema>=4.0.0
-
+# playwright>=1.40.0   # also needs: playwright install chromium
