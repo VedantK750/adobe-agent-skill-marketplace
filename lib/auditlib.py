@@ -291,15 +291,60 @@ def soup(html):
 
 def visible_text(html):
     """Text a naive extractor would see. Strips scripts, styles and markup."""
-    s = soup(html)
+    return visible_text_from(soup(html))
+
+
+def main_text(html):
+    """Text with obvious site chrome removed, approximating the body copy."""
+    return main_text_from(soup(html))
+
+
+def both_texts(html):
+    """(visible_text, main_text) from a SINGLE parse of the document.
+
+    The two differ only in how much chrome they remove, so parsing twice to
+    produce them is pure waste -- and not cheap waste: a crawler parsed each
+    page four times (metadata, visible text, main text, links), which on
+    multi-megabyte documents dominated the whole audit's runtime. One storefront
+    spent 674 seconds and kept zero pages.
+
+    Capping the document before parsing looked like the fix and was not: it cut
+    real `<h1>`, `<main>` and JSON-LD off the end of large pages, and the checks
+    that read those fields roughly doubled their firing rate. Parsing once costs
+    the same reduction with no truncation and no fidelity lost.
+    """
+    return both_texts_from(soup(html))
+
+
+def both_texts_from(s):
+    """both_texts over an already-parsed soup. DESTRUCTIVE to that soup.
+
+    Callers must finish every other read of `s` before calling this: it strips
+    tags out of the tree in place, so anything asking afterwards whether the
+    page has a <script>, an <iframe> or a <nav> gets the wrong answer.
+    """
+    # Order matters: both texts strip the same boilerplate, so do it once, take
+    # the wider text, then narrow the SAME tree down to the body copy.
+    for tag in s(BOILERPLATE_TAGS):
+        tag.decompose()
+    visible = normalise_ws(s.get_text(" "))
+    main = s.find("main") or s.find(attrs={"role": "main"}) or s.find("article")
+    if main is not None:
+        return visible, normalise_ws(main.get_text(" "))
+    for tag in s(CHROME_TAGS):
+        tag.decompose()
+    return visible, normalise_ws(s.get_text(" "))
+
+
+def visible_text_from(s):
+    """visible_text over an already-parsed soup. Destructive to that soup."""
     for tag in s(BOILERPLATE_TAGS):
         tag.decompose()
     return normalise_ws(s.get_text(" "))
 
 
-def main_text(html):
-    """Text with obvious site chrome removed, approximating the body copy."""
-    s = soup(html)
+def main_text_from(s):
+    """main_text over an already-parsed soup. Destructive to that soup."""
     for tag in s(BOILERPLATE_TAGS):
         tag.decompose()
     main = s.find("main") or s.find(attrs={"role": "main"}) or s.find("article")
