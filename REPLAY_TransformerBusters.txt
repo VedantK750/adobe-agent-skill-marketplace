@@ -1,0 +1,75 @@
+# Adobe University Hackathon 2026 - Round 4 reproduction manifest
+# Team: TransformerBusters
+# Engine: the unchanged Round 3 marketplace (brand-ai-readiness-audit).
+# Nothing in this file changes the engine; it only records how to run it.
+
+TEST_SITE_URLS:   https://razorpay.com/, https://www.postman.com/
+
+LLM_MODEL:        Claude Opus 5 (claude-opus-5, 2026-09)
+AGENT_HARNESS:    Claude Code __FILL_VERSION__ (VS Code extension)
+
+ENV_SETUP:        python3 -m pip install -r requirements.txt
+                  # Only `requests` and `beautifulsoup4` are required.
+                  # lxml / jsonschema are optional; the audit degrades
+                  # honestly without them and still passes validation.
+                  # No API key, no network service, no browser needed.
+
+TEST_STEPS:
+  1. git clone https://github.com/VedantK750/adobe-agent-skill-marketplace.git
+     cd adobe-agent-skill-marketplace
+     git checkout saarthak
+     python3 -m pip install -r requirements.txt
+
+  2. Open an agent session in that directory (Claude Code) and give it this
+     prompt verbatim:
+
+     Read marketplace.json, then follow skills/audit-orchestrator/SKILL.md
+     (the entrypoint skill) to audit https://razorpay.com/ with
+     --max-pages 10 --no-render. Report the findings by severity with the
+     evidence for each, and name the top three fixes in priority order.
+
+     The agent resolves the entrypoint from marketplace.json, reads the
+     entrypoint SKILL.md, and runs the command that skill documents:
+
+     python3 skills/audit-orchestrator/scripts/run_audit.py \
+       --url https://razorpay.com/ --workdir ./audit-run --max-pages 10 \
+       --no-render --markdown
+
+  3. The audit writes ./audit-run/audit-report.json (schema-validated) and
+     ./audit-run/audit-report.md (human-readable). Findings are sorted by
+     severity, then by ascending effort, so the top of the list is the
+     prioritized fix order. Per-skill evidence fragments are written to
+     ./audit-run/fragments/ and the raw crawl evidence to
+     ./audit-run/snapshot.json, so every finding can be traced to what was
+     actually fetched.
+
+EXPECTED_OUTPUT:  ./audit-run/audit-report.json
+
+# ---------------------------------------------------------------------------
+# FALLBACK RUN PATH (no LLM, no paid harness required)
+#
+# The marketplace is a headless, deterministic engine; the agent harness only
+# reads the SKILL.md and invokes it. Judges without Claude Code can reproduce
+# the identical report with the single command in step 2 above:
+#
+#   python3 skills/audit-orchestrator/scripts/run_audit.py \
+#     --url https://razorpay.com/ --workdir ./audit-run --max-pages 10 \
+#     --no-render --markdown
+#
+# Analysis is a pure function of the crawl snapshot, so re-running the
+# analysers over a saved snapshot.json reproduces the report byte for byte
+# (tests/run_tests.py asserts this over ten repeat runs). Between two live
+# runs only the network can differ.
+#
+# JUDGE-CHOSEN URL: substitute any site for --url. No configuration, no
+# allowlist, no per-site tuning exists anywhere in the engine.
+#
+# VERIFY THE ENGINE IS THE SUBMITTED ONE (optional, ~40s, no network):
+#   python3 tests/run_tests.py         # 116 assertions over local fixtures
+#   python3 tests/check_compliance.py  # 63 brief requirements, incl. that no
+#                                      # skill can write to a site (AST-checked)
+#
+# GUARDRAILS: read-only. GET requests only, robots.txt fetched first and
+# obeyed, one fetch per URL with a politeness delay, capped by page count and
+# a wall-clock budget.
+# ---------------------------------------------------------------------------
