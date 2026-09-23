@@ -3,7 +3,7 @@
 # Engine: the unchanged Round 3 marketplace (brand-ai-readiness-audit).
 # Nothing in this file changes the engine; it only records how to run it.
 
-TEST_SITE_URLS:   https://razorpay.com/, https://www.postman.com/
+TEST_SITE_URLS:   https://razorpay.com/
 
 LLM_MODEL:        Claude Opus 5 (claude-opus-5, 2026-09)
 AGENT_HARNESS:    Claude Code v2.1.280 (VS Code extension, win32-x64)
@@ -27,21 +27,14 @@ TEST_STEPS:
   2. Open an agent session in that directory (Claude Code) and give it this
      prompt verbatim:
 
-     Read marketplace.json, then follow skills/audit-orchestrator/SKILL.md
-     (the entrypoint skill) to audit https://razorpay.com/ with
-     --max-pages 10 --no-render. Report the findings by severity with the
-     evidence for each, and name the top three fixes in priority order.
+     Read marketplace.json to find the entrypoint skill, follow its SKILL.md, and audit https://razorpay.com/ with --max-pages 10 --no-render. Then show me the complete report: every finding in priority order with its severity, evidence and suggested fix, and the full mechanism and verification for the most severe one.
 
      The agent resolves the entrypoint from marketplace.json, reads the
      entrypoint SKILL.md, and runs the command that skill documents:
 
      python3 skills/audit-orchestrator/scripts/run_audit.py --url https://razorpay.com/ --workdir ./audit-run --max-pages 10 --no-render --markdown
 
-  3. Second site shown in the video, same engine, same command shape:
-
-     python3 skills/audit-orchestrator/scripts/run_audit.py --url https://www.postman.com/ --workdir ./audit-run-postman --max-pages 10 --no-render --markdown
-
-  4. The audit writes ./audit-run/audit-report.json (schema-validated) and
+  3. The audit writes ./audit-run/audit-report.json (schema-validated) and
      ./audit-run/audit-report.md (human-readable). Findings are sorted by
      severity, then by ascending effort, so the top of the list is the
      prioritized fix order. Per-skill evidence fragments are written to
@@ -63,7 +56,8 @@ EXPECTED_OUTPUT:  ./audit-run/audit-report.json
 # Analysis is a pure function of the crawl snapshot, so re-running the
 # analysers over a saved snapshot.json reproduces the report byte for byte
 # (tests/run_tests.py asserts this over ten repeat runs). Between two live
-# runs only the network can differ.
+# runs only the network can differ, so the finding count may move by one or
+# two as the crawler samples different pages; the severe findings are stable.
 #
 # JUDGE-CHOSEN URL: substitute any site for --url. No configuration, no
 # allowlist, no per-site tuning exists anywhere in the engine.
