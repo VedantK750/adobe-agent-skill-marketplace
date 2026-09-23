@@ -1,102 +1,84 @@
-# Round 4 recording cheat sheet - PowerShell
-# TransformerBusters
+# Round 4 recording reference - TransformerBusters
 #
-# Every command below has been run and verified on this machine.
-# Paste them one at a time. Do NOT run this file as a script.
+# =========================================================================
+#  PART 2 IS AN AGENT SESSION, NOT THESE COMMANDS.
 #
-# NOTE ON PYTHON: this machine has `py -3`, not `python3`. The manifest
-# documents both. Keep using `py -3` on camera.
+#  The brief: "A CLI-based session in which an AI agent runs your
+#  marketplace and reports its findings is exactly what we want to see.
+#  The interface is the agent interaction itself."
+#
+#  So the demo is: open Claude Code in this repo, paste ONE prompt, and let
+#  it work. See "PRIMARY" below.
+#
+#  The PowerShell commands further down are the FALLBACK path only - the
+#  same one documented in REPLAY_TransformerBusters.txt for judges who do
+#  not have Claude Code. If you record with those, you must say on camera
+#  that you are running the entrypoint directly, because claiming "Claude
+#  Code is driving this" while running raw python is a video/manifest
+#  mismatch and an automatic integrity failure.
+# =========================================================================
 
-# ---------------------------------------------------------------------------
-# 0. BEFORE YOU HIT RECORD
-# ---------------------------------------------------------------------------
-# - Increase terminal font (Ctrl + Shift + +) so text is readable in video.
-# - Maximise the window; close other tabs/panes.
-# - Have https://razorpay.com/robots.txt open in a browser tab, ready to show.
-# - Confirm you are in the repo root:
 
+# -------------------------------------------------------------------------
+# PRIMARY - what to record
+# -------------------------------------------------------------------------
+# 1. Open Claude Code in C:\Users\saart\adobe-agent-skill-marketplace
+# 2. Say on camera: "Claude Code v2.1.280 running Claude Opus 5."
+# 3. Type this prompt (the URL goes in on camera):
+#
+#    Read marketplace.json, then follow skills/audit-orchestrator/SKILL.md
+#    (the entrypoint skill) to audit https://razorpay.com/ with
+#    --max-pages 10 --no-render. Report the findings by severity with the
+#    evidence for each, and name the top three fixes in priority order.
+#
+# 4. Let it run (~20s of audit). You will see it read marketplace.json,
+#    open the entrypoint SKILL.md, and invoke run_audit.py - that is the
+#    "one line on wiring" requirement satisfied on screen.
+#
+# 5. If its summary is thin on any single finding, ask in the same session:
+#
+#    Show me the full evidence, mechanism, fix steps and verification for
+#    the critical finding.
+#
+# 6. Switch to the browser: https://razorpay.com/robots.txt
+#    Point at:  User-agent: Bytespider
+#               Disallow: /
+#    Say: "That is the finding, corroborated against the live site."
+#
+# 7. Close: "Same run is step 2 of REPLAY_TransformerBusters.txt, and the
+#    analysis is a pure function of the crawl snapshot."
+
+
+# -------------------------------------------------------------------------
+# BEFORE YOU RECORD (either path)
+# -------------------------------------------------------------------------
 cd C:\Users\saart\adobe-agent-skill-marketplace
-Get-Location
-
-# - Clear any previous run so the audit happens live on camera:
-Remove-Item -Recurse -Force .\audit-run -ErrorAction SilentlyContinue
-
-# - Clear the screen right before the take:
+Remove-Item -Recurse -Force .\audit-run, .\audit-run-postman -ErrorAction SilentlyContinue
 Clear-Host
+# Bump the terminal font: Ctrl + Shift + +
+# Open https://razorpay.com/robots.txt in a browser tab, ready to switch to.
 
 
-# ---------------------------------------------------------------------------
-# 1. WIRING - prove it is the Round 3 marketplace, not a hardcoded demo  (~15s)
-# ---------------------------------------------------------------------------
-# Say: "Eight skills, exactly one entrypoint, declared in the manifest."
+# =========================================================================
+# FALLBACK ONLY - if Claude Code misbehaves mid-recording.
+# If you use these, say "running the entrypoint directly - this is the
+# fallback path documented in the manifest."
+# =========================================================================
 
+# Wiring: eight skills, exactly one entrypoint
 py -3 -c "import json;m=json.load(open('marketplace.json'));print('marketplace:',m['name'],m['version']);[print(('  ENTRYPOINT ' if s.get('entrypoint') else '             ')+s['id']) for s in m['skills']]"
 
-
-# ---------------------------------------------------------------------------
-# 2. THE LIVE RUN  (~19 seconds - do not trim the start)
-# ---------------------------------------------------------------------------
-# Say the harness + model out loud here. It is a scored line:
-#   "Claude Code v2.1.280 driving Claude Opus 5, invoking the Round 3
-#    entrypoint skill. The agent reads marketplace.json, finds the entrypoint,
-#    and runs what its SKILL.md documents."
-#
-# Type the URL on camera. This is the continuity the integrity gate cares
-# about - from here to the findings there must be no cut except idle waiting.
-
+# The audit (~19s)
 py -3 skills/audit-orchestrator/scripts/run_audit.py --url https://razorpay.com/ --workdir ./audit-run --max-pages 10 --no-render --markdown
 
-
-# ---------------------------------------------------------------------------
-# 3. SUMMARY  (~10s)
-# ---------------------------------------------------------------------------
-
+# Summary
 py -3 -c "import json;r=json.load(open('audit-run/audit-report.json',encoding='utf-8'));s=r['summary'];m=r['audit_meta'];print('%s | %s | %d pages | %d findings: %d critical, %d high, %d medium, %d low'%(r['site'],m['site_type'],m['pages_crawled'],s['total_findings'],s['critical'],s['high'],s['medium'],s['low']))"
 
-
-# ---------------------------------------------------------------------------
-# 4. PRIORITISATION  (~15s)
-# ---------------------------------------------------------------------------
-# Say: "Sorted by severity, then by ascending effort - so among equally severe
-#       findings the cheapest fix comes first."
-
+# Prioritised list - severity, then ascending effort
 py -3 -c "import json;r=json.load(open('audit-run/audit-report.json',encoding='utf-8'));[print('%-6s %-9s %-26s %s'%(f['id'],f['severity'],f['check_id'],f['suggested_action'].get('effort','')+' effort')) for f in r['findings'][:8]]"
 
-
-# ---------------------------------------------------------------------------
-# 5. DRILL INTO THE CRITICAL FINDING  (~35s) - the most important shot
-# ---------------------------------------------------------------------------
-
+# Drill into the critical finding
 py -3 -c "import json,textwrap;r=json.load(open('audit-run/audit-report.json',encoding='utf-8'));f=r['findings'][0];a=f['suggested_action'];w=lambda t,i='  ':print(textwrap.fill(t,96,initial_indent=i,subsequent_indent=i));print('%s  %s  %s'%(f['id'],f['severity'].upper(),f['title']));print();print('WHY IT MATTERS');w(f['mechanism']);print();print('EVIDENCE');w(f['evidence']);print();print('FIX (%s priority, %s effort)'%(a['priority'],a['effort']));w(a['summary']);[w('- '+s) for s in a['steps'][:3]];print();print('VERIFY');w(a['verification'])"
 
-# NOW SWITCH TO THE BROWSER TAB: https://razorpay.com/robots.txt
-# Point at the two lines:   User-agent: Bytespider
-#                           Disallow: /
-# Say: "That is the finding, corroborated against the live site."
-# This is the strongest ten seconds in the video - do not rush it.
-
-
-# ---------------------------------------------------------------------------
-# 6. CLOSE ON REPRODUCIBILITY  (~15s)
-# ---------------------------------------------------------------------------
-# Say: "Same command is step 2 of REPLAY_TransformerBusters.txt. Analysis is a
-#       pure function of the crawl snapshot, so a judge re-running this gets
-#       the same substance."
-
+# Outputs
 Get-ChildItem .\audit-run -Name
-
-
-# ---------------------------------------------------------------------------
-# OPTIONAL - second site, only if Part 2 is comfortably under 2:00
-# ---------------------------------------------------------------------------
-# postman.com serves ~101 KB of HTML that yields ONE word of readable text.
-# "A human sees a full page; a machine that does not run JavaScript sees
-#  nothing." Also critical, different mechanism.
-
-# py -3 skills/audit-orchestrator/scripts/run_audit.py --url https://www.postman.com/ --workdir ./audit-run-postman --max-pages 10 --no-render --markdown
-
-
-# ---------------------------------------------------------------------------
-# AFTER RECORDING - clean up the working dirs (they are gitignored anyway)
-# ---------------------------------------------------------------------------
-# Remove-Item -Recurse -Force .\audit-run, .\audit-run-postman -ErrorAction SilentlyContinue
