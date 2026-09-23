@@ -27,7 +27,7 @@ TEST_STEPS:
   2. Open an agent session in that directory (Claude Code) and give it this
      prompt verbatim:
 
-     Read marketplace.json to find the entrypoint skill, follow its SKILL.md, and audit https://razorpay.com/ with --max-pages 10 --no-render. Then show me the complete report: every finding in priority order with its severity, evidence and suggested fix, and the full mechanism and verification for the most severe one.
+     Read marketplace.json to find the entrypoint skill, follow its SKILL.md, and audit https://razorpay.com/ with --max-pages 10 --no-render, writing to ./audit-run. Then show me the complete report: every finding in priority order with its severity, evidence and suggested fix, and the full mechanism and verification for the most severe one.
 
      The agent resolves the entrypoint from marketplace.json, reads the
      entrypoint SKILL.md, and runs the command that skill documents:
@@ -43,6 +43,8 @@ TEST_STEPS:
      actually fetched.
 
 EXPECTED_OUTPUT:  ./audit-run/audit-report.json
+                  # A copy of the exact report produced in the recorded video
+                  # is committed at round4/recorded-run/ for corroboration.
 
 # ---------------------------------------------------------------------------
 # FALLBACK RUN PATH (no LLM, no paid harness required)
