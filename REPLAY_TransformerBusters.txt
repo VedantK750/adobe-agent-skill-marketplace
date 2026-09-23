@@ -19,10 +19,16 @@ ENV_SETUP:        python3 -m pip install -r requirements.txt
                   # No API key, no network service, no browser needed.
 
 TEST_STEPS:
-  1. git clone https://github.com/VedantK750/adobe-agent-skill-marketplace.git
-     cd adobe-agent-skill-marketplace
-     git checkout saarthak
+  1. Unzip the Round 3 submission you already hold
+     (brand-ai-readiness-audit.zip) and change into it:
+
+     unzip brand-ai-readiness-audit.zip -d brand-ai-readiness-audit
+     cd brand-ai-readiness-audit
      python3 -m pip install -r requirements.txt
+
+     That package IS the engine. Nothing else needs to be fetched: the
+     marketplace is self-contained, needs no API key and no network service,
+     and the manifest resolves without any external lookup.
 
   2. Open an agent session in that directory (Claude Code) and give it this
      prompt verbatim:
@@ -43,8 +49,9 @@ TEST_STEPS:
      actually fetched.
 
 EXPECTED_OUTPUT:  ./audit-run/audit-report.json
-                  # A copy of the exact report produced in the recorded video
-                  # is committed at round4/recorded-run/ for corroboration.
+                  # The video shows this same report being produced. Finding
+                  # counts move by one or two between runs as the crawler
+                  # samples different pages; the severe findings are stable.
 
 # ---------------------------------------------------------------------------
 # FALLBACK RUN PATH (no LLM, no paid harness required)
