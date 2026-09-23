@@ -6,9 +6,13 @@
 TEST_SITE_URLS:   https://razorpay.com/, https://www.postman.com/
 
 LLM_MODEL:        Claude Opus 5 (claude-opus-5, 2026-09)
-AGENT_HARNESS:    Claude Code __FILL_VERSION__ (VS Code extension)
+AGENT_HARNESS:    Claude Code v2.1.280 (VS Code extension, win32-x64)
 
 ENV_SETUP:        python3 -m pip install -r requirements.txt
+                  # PYTHON COMMAND: this manifest writes `python3`, which is
+                  # correct on macOS/Linux. On Windows use `py -3` instead
+                  # (`python3` is not installed there by default). Every
+                  # command below works under either name.
                   # Only `requests` and `beautifulsoup4` are required.
                   # lxml / jsonschema are optional; the audit degrades
                   # honestly without them and still passes validation.
@@ -31,11 +35,13 @@ TEST_STEPS:
      The agent resolves the entrypoint from marketplace.json, reads the
      entrypoint SKILL.md, and runs the command that skill documents:
 
-     python3 skills/audit-orchestrator/scripts/run_audit.py \
-       --url https://razorpay.com/ --workdir ./audit-run --max-pages 10 \
-       --no-render --markdown
+     python3 skills/audit-orchestrator/scripts/run_audit.py --url https://razorpay.com/ --workdir ./audit-run --max-pages 10 --no-render --markdown
 
-  3. The audit writes ./audit-run/audit-report.json (schema-validated) and
+  3. Second site shown in the video, same engine, same command shape:
+
+     python3 skills/audit-orchestrator/scripts/run_audit.py --url https://www.postman.com/ --workdir ./audit-run-postman --max-pages 10 --no-render --markdown
+
+  4. The audit writes ./audit-run/audit-report.json (schema-validated) and
      ./audit-run/audit-report.md (human-readable). Findings are sorted by
      severity, then by ascending effort, so the top of the list is the
      prioritized fix order. Per-skill evidence fragments are written to
@@ -52,9 +58,7 @@ EXPECTED_OUTPUT:  ./audit-run/audit-report.json
 # reads the SKILL.md and invokes it. Judges without Claude Code can reproduce
 # the identical report with the single command in step 2 above:
 #
-#   python3 skills/audit-orchestrator/scripts/run_audit.py \
-#     --url https://razorpay.com/ --workdir ./audit-run --max-pages 10 \
-#     --no-render --markdown
+#   python3 skills/audit-orchestrator/scripts/run_audit.py --url https://razorpay.com/ --workdir ./audit-run --max-pages 10 --no-render --markdown
 #
 # Analysis is a pure function of the crawl snapshot, so re-running the
 # analysers over a saved snapshot.json reproduces the report byte for byte
