@@ -79,8 +79,8 @@ tabs *before* recording so you switch instantly.
 
 ## ⑤ 1:48 – 2:18 · Where the fixes come from
 
-**SHOW** `skills/site-acquisition/scripts/analyze.py` at **line 183**, scroll
-slowly to **line 213**.
+**SHOW** `skills/machine-readability/scripts/analyze.py` at **line 181**,
+scroll slowly to **line 203**.
 
 > **SAY:**
 > "This is the check you'll see fire in the live run. Look at what a finding
@@ -119,7 +119,7 @@ slowly to **line 213**.
 | 3 | `skills/site-acquisition/scripts/classify.py` | 114 |
 | 4 | `lib/auditlib.py` | 44 |
 | 5 | `skills/audit-orchestrator/scripts/compose_report.py` | 22 → 34 → **76** |
-| 6 | `skills/site-acquisition/scripts/analyze.py` | 183 → 213 |
+| 6 | `skills/machine-readability/scripts/analyze.py` | 181 → 203 |
 | 7 | `tests/` folder | — |
 | 8 | `tests/corpus-d2c.txt` | scroll |
 
@@ -133,9 +133,9 @@ Cut in this order — each is self-contained:
 
 # Three things not to say
 
-- **Don't** claim the audit found razorpay blocking AI assistants. Only
-  ByteSpider is blocked; ClaudeBot and ChatGPT are explicitly allowed. Part 2
-  handles that honestly — don't set up a claim Part 2 has to walk back.
+- **Don't** over-claim the empty-shell finding. It means a fetcher that does
+  not run JavaScript sees no text — not that the site is invisible to every
+  assistant. Some assistants do render. Say what the evidence says.
 - **Don't** cite any file, threshold or number that isn't in the zip. Every
   figure here is in a file a judge can open.
 - **Don't** say "eight hundred sites" while showing anything other than
