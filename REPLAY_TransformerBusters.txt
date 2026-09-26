@@ -3,7 +3,7 @@
 # Engine: the unchanged Round 3 marketplace (brand-ai-readiness-audit).
 # Nothing in this file changes the engine; it only records how to run it.
 
-TEST_SITE_URLS:   https://www.duolingo.com/
+TEST_SITE_URLS:   https://www.duolingo.com/, https://ghost.org/, https://zerodha.com/
 
 LLM_MODEL:        Claude Opus 5 (claude-opus-5, 2026-09)
 AGENT_HARNESS:    Claude Code v2.1.280 (VS Code extension, win32-x64)
@@ -33,34 +33,47 @@ TEST_STEPS:
   2. Open an agent session in that directory (Claude Code) and give it this
      prompt verbatim:
 
-     Read marketplace.json to find the entrypoint skill, follow its SKILL.md, and audit https://www.duolingo.com/ with --max-pages 10 --no-render, writing to ./audit-run. Then show me the complete report: every finding in priority order with its severity, evidence and suggested fix, and the full mechanism and verification for the most severe one.
+     Read marketplace.json to find the entrypoint skill and follow its SKILL.md. Audit these three sites with --max-pages 10 --no-render, writing each to its own folder: https://www.duolingo.com/ to ./audit-run/duolingo, https://ghost.org/ to ./audit-run/ghost, and https://zerodha.com/ to ./audit-run/zerodha. For each site list the findings in priority order with severity and evidence. Then take the single most severe finding across all three and show its full mechanism, fix steps and verification.
 
      The agent resolves the entrypoint from marketplace.json, reads the
-     entrypoint SKILL.md, and runs the command that skill documents:
+     entrypoint SKILL.md, and runs the command that skill documents, once per
+     site:
 
-     python3 skills/audit-orchestrator/scripts/run_audit.py --url https://www.duolingo.com/ --workdir ./audit-run --max-pages 10 --no-render --markdown
+     python3 skills/audit-orchestrator/scripts/run_audit.py --url https://www.duolingo.com/ --workdir ./audit-run/duolingo --max-pages 10 --no-render --markdown
+     python3 skills/audit-orchestrator/scripts/run_audit.py --url https://ghost.org/ --workdir ./audit-run/ghost --max-pages 10 --no-render --markdown
+     python3 skills/audit-orchestrator/scripts/run_audit.py --url https://zerodha.com/ --workdir ./audit-run/zerodha --max-pages 10 --no-render --markdown
 
-  3. The audit writes ./audit-run/audit-report.json (schema-validated) and
-     ./audit-run/audit-report.md (human-readable). Findings are sorted by
-     severity, then by ascending effort, so the top of the list is the
-     prioritized fix order. Per-skill evidence fragments are written to
-     ./audit-run/fragments/ and the raw crawl evidence to
-     ./audit-run/snapshot.json, so every finding can be traced to what was
+  3. Each run writes audit-report.json (schema-validated) and audit-report.md
+     (human-readable) into its own folder. Findings are sorted by severity,
+     then by ascending effort, so the top of each list is the prioritized fix
+     order. Per-skill evidence fragments are written to fragments/ and the raw
+     crawl evidence to snapshot.json, so every finding traces back to what was
      actually fetched.
 
-EXPECTED_OUTPUT:  ./audit-run/audit-report.json
-                  # The video shows this same report being produced. Finding
-                  # counts move by one or two between runs as the crawler
-                  # samples different pages; the severe findings are stable.
+EXPECTED_OUTPUT:  ./audit-run/duolingo/audit-report.json
+                  ./audit-run/ghost/audit-report.json
+                  ./audit-run/zerodha/audit-report.json
 
+# ---------------------------------------------------------------------------
+# WHAT THE THREE SITES DEMONSTRATE
+#
+# One per stage of the retrieval pipeline the marketplace is built around:
+#
+#   duolingo.com  MR-EMPTY-SHELL (critical). The page cannot be READ: about
+#                 11 KB of HTML behind 14 script tags yields one word of text.
+#   ghost.org     SD-NO-ORGANIZATION (high). Facts have no ENTITY to attach
+#                 to: JSON-LD is present but only WebPage/WebSite types.
+#   zerodha.com   AE-NO-DEFINITION (high). No quotable FACT: 932 words on the
+#                 home page and no sentence of the form "Zerodha is a ...".
+#
+# Each was checked by hand against the live site, independently of the audit.
+#
 # ---------------------------------------------------------------------------
 # FALLBACK RUN PATH (no LLM, no paid harness required)
 #
 # The marketplace is a headless, deterministic engine; the agent harness only
 # reads the SKILL.md and invokes it. Judges without Claude Code can reproduce
-# the identical report with the single command in step 2 above:
-#
-#   python3 skills/audit-orchestrator/scripts/run_audit.py --url https://www.duolingo.com/ --workdir ./audit-run --max-pages 10 --no-render --markdown
+# the identical reports with the three commands in step 2 above.
 #
 # Analysis is a pure function of the crawl snapshot, so re-running the
 # analysers over a saved snapshot.json reproduces the report byte for byte
