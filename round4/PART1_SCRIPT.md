@@ -1,116 +1,117 @@
-# Part 1 — methodology · final script (≤ 3:00)
+# Part 1 — methodology · speaking script (≤ 3:00)
 
-Read the **SAY** blocks aloud as written. Word count is measured, not
-estimated: **419 spoken words** — 2:47 at a normal pace, 2:59 unhurried.
-That leaves room for pauses and switching tabs.
+Written to be **said out loud**, not read off a page. Contractions, short
+sentences, the odd aside — say it the way you'd explain it to another
+developer looking over your shoulder.
 
-Every file is inside the submitted zip. Every line number verified against the
-package.
+If you fluff a line, keep going. A small stumble sounds more real than a
+perfect read.
 
-**Setup:** editor open, large font, file tree visible. Open all eight files as
-tabs *before* recording so you switch instantly.
+**424 spoken words — about 2:49 at a normal pace.** That is inside the cap but
+not by much. If you speak slowly or pause a lot between tabs, drop the first
+item on the cut list before you start rather than rushing at the end.
+
+**Setup:** editor, big font, file tree visible. Open all eight tabs *before*
+recording so you're switching, not hunting.
 
 ---
 
-## ① 0:00 – 0:22 · What we looked for
+## ① 0:00 – 0:25 · Where the checks came from
 
 **SHOW** `references/failure-modes.md`, table at **line 12** filling the screen.
 
 > **SAY:**
-> "We looked at what separates websites AI assistants cite from ones they
-> ignore. Every difference we could reproduce fell into three stages.
+> "We started by looking at a lot of websites. Which ones do AI assistants
+> quote, and which ones do they skip?
 >
-> The crawler has to be let in. It has to read the page. And it has to pick out
-> a fact. Fail any one, and the page doesn't exist for that system — though a
-> human sees it perfectly.
+> Almost everything came down to three things. Can the crawler get in. Can it
+> read the page. Can it find the fact someone asked about. Break any one and
+> the page may as well not exist, even though you and I can see it fine.
 >
-> This file is the spine — every row ties a signal we can observe to the
-> mechanism that makes it matter, and the check that finds it."
+> So this file is the backbone. Every row is a signal we can measure, what it
+> breaks, and the check that catches it."
 
 ---
 
-## ② 0:22 – 0:38 · How it's split
+## ② 0:25 – 0:40 · Why eight skills
 
 **SHOW** `marketplace.json` — whole file.
 
 > **SAY:**
-> "Hence eight skills, one entrypoint, mapped onto those stages. The
-> orchestrator reads this manifest to decide what to run — it's not a hardcoded
-> call graph."
+> "That's why it's eight skills, not one big one — they line up with those
+> stages. And the orchestrator works out what to run by reading this file."
 
 ---
 
-## ③ 0:38 – 1:08 · The part that took longest
+## ③ 0:40 – 1:10 · The bit we got wrong first
 
 **SHOW** `classify.py` at **line 114**.
 
 > **SAY:**
-> "The hard part wasn't detection. It was restraint. Every check declares which
-> page types it applies to. 'No Product schema' is a real finding on a product
-> page and a false positive on a blog post."
+> "Honestly, the hard part wasn't finding problems. It was not crying wolf.
+>
+> Early on we'd flag 'no Product schema' on a blog post, which is nonsense. So
+> now every check declares which page types it applies to, and we classify each
+> page before anything runs."
 
 **SHOW** `lib/auditlib.py` at **line 44**.
 
 > **SAY:**
-> "Same for how much evidence we have. A claim about the whole site needs three
-> content pages, or it records 'inconclusive' instead of asserting. 'No
-> structured data anywhere' off a one-page crawl isn't a finding — it's a
-> guess."
+> "Same for how much we've seen. If we only got one page, we're not going to
+> tell you the whole site has no structured data. We don't know that. So a
+> claim about the site needs three pages, or it comes back inconclusive."
 
 ---
 
-## ④ 1:08 – 1:48 · How severity is decided
+## ④ 1:10 – 1:50 · How we decide what's serious
 
 **SHOW** `compose_report.py` — **line 22**, then **34**, then scroll to
-**line 76** and stop.
+**line 76** and stop there.
 
 > **SAY:**
-> "Severity is never hand-set. It's computed from the mechanism impact —
-> blocking, degrading, or weakening.
+> "Nothing here has a severity typed in by hand. It comes from what the
+> problem does — block retrieval, degrade it, or just weaken a signal.
 >
-> Prevalence only moves it when the denominator can carry a ratio. One out of
-> one is a single fact, not a hundred percent.
+> And prevalence only moves it when there's enough to divide by. One out of one
+> isn't a hundred percent. It's one page.
 >
-> And this line keeps the scale meaningful: only a blocking mechanism can ever
-> be critical. Anything that merely degrades caps at high, however widespread.
-> Across an eight-hundred-site run, critical was two percent of findings."
+> This line's the important one. Only something that genuinely blocks retrieval
+> can be critical. Everything else tops out at high, however many pages it's
+> on. Across about eight hundred sites, critical came out at two percent."
 
 ---
 
-## ⑤ 1:48 – 2:18 · Where the fixes come from
+## ⑤ 1:50 – 2:20 · Where the fixes come from
 
 **SHOW** `skills/machine-readability/scripts/analyze.py` at **line 181**,
-scroll slowly to **line 203**.
+scroll slowly to **line 202**.
 
 > **SAY:**
-> "This is the check you'll see fire in the live run. Look at what a finding
-> carries. A mechanism — why this breaks retrieval, not just what's missing.
-> The evidence. The steps to change. And a verification line, so you can
-> confirm the fix worked.
+> "This is the check that fires in the demo you're about to see. Look at what
+> it carries. A mechanism — why this breaks things, not just that something's
+> missing. The evidence. The steps to fix it. And how to confirm it worked.
 >
-> Ordering is severity first, then ascending effort — so among equally serious
-> findings, the cheapest fix comes first."
+> We sort by severity, then effort. So if two things are equally bad, the cheap
+> one comes first."
 
 ---
 
-## ⑥ 2:18 – 2:45 · Why we trust it
+## ⑥ 2:20 – 2:45 · How we know it isn't nonsense
 
-**SHOW** the `tests/` folder, then open `tests/corpus-d2c.txt` and scroll.
+**SHOW** the `tests/` folder, then open `tests/corpus-d2c.txt` and scroll it.
 
 > **SAY:**
-> "Three suites ship with it. Fixtures assert both directions of every check —
-> fire on the broken site, stay silent on the clean one. A compliance gate
-> proves recommend-only from source: it walks the syntax tree of every script
-> and fails on any write request.
+> "Three test suites ship with it. The fixtures check both directions — fire on
+> the broken site, stay quiet on the clean one.
 >
-> And a live suite audits roughly eight hundred real websites, reporting a
-> firing rate per check — because a check that fires on everything is worse
-> than useless. That's how we found seven classes of false positive our
-> fixtures had all passed."
+> And this one runs the audit across about eight hundred real websites and
+> tells us how often each check fires. Because a check that goes off everywhere
+> isn't telling you anything. It's how we caught seven false positives our own
+> tests were happily passing."
 
 ---
 
-# Tab order — open these before recording
+# Tabs to open before you record
 
 | # | File | Line |
 |---|---|---|
@@ -119,24 +120,31 @@ scroll slowly to **line 203**.
 | 3 | `skills/site-acquisition/scripts/classify.py` | 114 |
 | 4 | `lib/auditlib.py` | 44 |
 | 5 | `skills/audit-orchestrator/scripts/compose_report.py` | 22 → 34 → **76** |
-| 6 | `skills/machine-readability/scripts/analyze.py` | 181 → 203 |
+| 6 | `skills/machine-readability/scripts/analyze.py` | 181 → 202 |
 | 7 | `tests/` folder | — |
 | 8 | `tests/corpus-d2c.txt` | scroll |
 
-# If you still run long
+# Covers the three things Part 1 is scored on
 
-Cut in this order — each is self-contained:
+- **Signal discovery** → ① `failure-modes.md`, and ③ `classify.py` +
+  `auditlib.py`
+- **Severity logic** → ④ `compose_report.py` lines 22, 34, 76
+- **Fix derivation and prioritisation** → ⑤ `analyze.py` 181–202
 
-1. The second paragraph of ③ (`auditlib.py`, line 44)
-2. The last paragraph of ⑥ (the live suite)
-3. Section ② entirely — the manifest is visible in Part 2 anyway
+Every file is in the submitted zip. Every line number checked against it.
 
-# Three things not to say
+# If you overrun
 
-- **Don't** over-claim the empty-shell finding. It means a fetcher that does
-  not run JavaScript sees no text — not that the site is invisible to every
-  assistant. Some assistants do render. Say what the evidence says.
-- **Don't** cite any file, threshold or number that isn't in the zip. Every
-  figure here is in a file a judge can open.
-- **Don't** say "eight hundred sites" while showing anything other than
-  `tests/corpus-d2c.txt`.
+Cut in this order — each stands alone:
+
+1. The `auditlib.py` paragraph in ③
+2. The last paragraph of ⑥ (the eight-hundred-site suite)
+3. Section ② — the manifest shows up in Part 2 anyway
+
+# Don't say
+
+- Don't say the site is invisible to all AI. The empty-shell finding means a
+  fetcher that doesn't run JavaScript sees no text. Some assistants do render.
+  Say what the evidence says and nothing more.
+- Don't cite a number or a file that isn't in the zip.
+- Don't say "eight hundred sites" unless `tests/corpus-d2c.txt` is on screen.
