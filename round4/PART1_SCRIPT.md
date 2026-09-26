@@ -1,152 +1,179 @@
-# Part 1 script — methodology (≤ 3:00)
+# Part 1 — methodology · final script (≤ 3:00)
 
-Every file named here is **inside the submitted zip**, so a judge can open it.
-Line numbers verified against the submitted package.
+Read the **SAY** blocks aloud as written. 440 words, which is 3:00 at a normal
+pace — don't rush, the timings have slack.
 
-Screen: editor, repo open, one file at a time. Narration ~430 words — read at a
-normal pace, don't rush. Timings are cumulative.
+Every file is inside the submitted zip. Every line number verified against the
+package.
+
+**Setup:** editor open, large font, file tree visible on the left. Have all
+nine files open as tabs beforehand so you switch instantly instead of
+navigating.
 
 ---
 
-## 0:00 – 0:25 · The frame
+## ① 0:00 – 0:25 · What we were looking for
 
-**SHOW:** `references/failure-modes.md` — scroll so the table at line 12 fills
-the screen.
+**SHOW** `references/failure-modes.md`, scrolled so the table at **line 12**
+fills the screen.
 
-> "We went looking for what separates sites AI assistants cite from ones they
-> ignore. Every difference we could reproduce fell into one of three stages:
-> the crawler has to be **let in**, it has to be able to **read** the page, and
-> it has to be able to **pick out a fact**. Fail any stage and the page doesn't
-> exist for that system — even though a human sees it fine.
+> **SAY:**
+> "We went looking for what separates websites AI assistants cite from ones
+> they ignore. And every difference we could actually reproduce fell into one
+> of three stages.
 >
-> This file is the spine of the whole marketplace. Every row ties an observable
-> signal to the mechanism that makes it matter, and to the check that detects
-> it. Nothing is written against a string we saw on one site — that's what
-> makes it generalise."
+> The crawler has to be let in. It has to be able to read the page. And it has
+> to be able to pick out a fact. Fail any one of those and the page doesn't
+> exist for that system — even though a human sees it perfectly.
+>
+> This file is the spine of the whole marketplace. Every row ties a signal we
+> can observe to the mechanism that makes it matter, and to the check that
+> detects it."
 
 ---
 
-## 0:25 – 0:45 · The decomposition
+## ② 0:25 – 0:45 · How it's split up
 
-**SHOW:** `marketplace.json` — whole file fits on screen.
+**SHOW** `marketplace.json` — whole file on screen.
 
-> "Eight skills, exactly one entrypoint. They map onto those stages:
-> `site-acquisition` is 'let in', `machine-readability` is 'can it be read',
-> `answer-extractability` is 'can a fact be quoted'. The orchestrator composes
-> them — and it reads this manifest to know what to run, so it isn't a
+> **SAY:**
+> "That's why there are eight skills and exactly one entrypoint. They map onto
+> those stages — site-acquisition is 'can we get in', machine-readability is
+> 'can it be read', answer-extractability is 'can a fact be quoted out of it'.
+>
+> And the orchestrator reads this manifest to decide what to run. It isn't a
 > hardcoded call graph."
 
 ---
 
-## 0:45 – 1:20 · The hardest part: not crying wolf
+## ③ 0:45 – 1:20 · The part we spent most time on
 
-**SHOW:** `skills/site-acquisition/scripts/classify.py` — line 114
-(`classify_page`), then line 196 (`classify_site`).
+**SHOW** `skills/site-acquisition/scripts/classify.py` at **line 114**.
 
-> "The thing we spent most effort on isn't detection, it's *restraint*. Every
-> check declares the page types it applies to. 'No Product schema' is a real
-> finding on a product page and a false positive on a blog post, so pages are
-> classified before any check runs."
+> **SAY:**
+> "The hardest part wasn't detection. It was restraint.
+>
+> Every check declares which page types it applies to. 'No Product schema' is a
+> real finding on a product page, and a false positive on a blog post. So we
+> classify pages before any check runs."
 
-**SHOW:** `lib/auditlib.py` — line 44, then line 51.
+**SHOW** `lib/auditlib.py` — **line 44**, then scroll to **line 51**.
 
-> "Same for the *size* of the evidence. A site-wide claim needs at least three
-> content pages, or it records `inconclusive` instead of asserting — because
-> 'no structured data anywhere' off a one-page crawl isn't a finding, it's a
-> guess. Two kinds of check are exempt, and they're listed in one place with
-> the reason: claims about the origin, like robots.txt, and defects we directly
+> **SAY:**
+> "And the same idea applies to how much evidence we have. A claim about the
+> whole site needs at least three content pages, or it records 'inconclusive'
+> instead of asserting — because 'no structured data anywhere' off a one-page
+> crawl isn't a finding, it's a guess.
+>
+> Two kinds of check are exempt, and they're listed in one place with the
+> reason: claims about the origin, like robots.txt, and defects we directly
 > observed on a named page."
 
 ---
 
-## 1:20 – 1:55 · Severity
+## ④ 1:20 – 1:55 · How severity is decided
 
-**SHOW:** `skills/audit-orchestrator/scripts/compose_report.py` — line 22, then
-34–35, then **line 76** (hold on this one).
+**SHOW** `skills/audit-orchestrator/scripts/compose_report.py` — **line 22**,
+then **34**, then scroll to **line 76** and stop there.
 
-> "Severity isn't hand-set. It's computed from the *mechanism impact*:
-> blocking, degrading, or weakening. Prevalence only shifts it when the
-> denominator can carry a ratio — one-of-one is a single fact, not a hundred
-> percent. Modifiers can raise severity by at most one level, and confidence
-> only ever lowers it.
+> **SAY:**
+> "Severity isn't hand-set anywhere. It's computed from the mechanism impact —
+> blocking, degrading, or weakening.
 >
-> This line is the rule that keeps the scale meaningful: **only `blocking`
-> impact can ever be critical.** Everything that merely degrades a signal caps
-> at high, however widespread. Across an eight-hundred-site run, critical came
-> out at two percent of all findings.
+> Prevalence only moves it when the denominator can actually carry a ratio. One
+> out of one is a single fact, not a hundred percent.
 >
-> And it's computed centrally, never by the skill that raised the finding —
-> otherwise the scale drifts across eight skills."
-
-**SHOW (briefly):** `skills/audit-orchestrator/references/severity-model.md`.
+> And this line is the rule that keeps the scale meaningful. Only a blocking
+> mechanism can ever be critical. Everything that merely degrades a signal caps
+> at high, no matter how widespread it is. Across an eight-hundred-site run,
+> critical came out at two percent of all findings.
+>
+> It's computed centrally, never by the skill that raised the finding —
+> otherwise the scale drifts across eight different skills."
 
 ---
 
-## 1:55 – 2:30 · Fixes
+## ⑤ 1:55 – 2:30 · Where the fixes come from
 
-**SHOW:** `skills/site-acquisition/scripts/analyze.py` — line 183, scroll
-through to 213 so mechanism → evidence → steps → verification are all visible.
+**SHOW** `skills/site-acquisition/scripts/analyze.py` at **line 183**, then
+scroll slowly down to **line 213** so the whole block passes through frame.
 
-> "This is the finding you'll see in the live run. Notice what a finding
-> carries: a **mechanism** — *why* it breaks retrieval, not just what's
-> missing; the **evidence** we observed; the **steps** to change; and a
-> **verification** line, so you can confirm the fix worked. A fix that can't be
-> traced to a mechanism is a guess, so mechanism is a required field.
+> **SAY:**
+> "This is the check you'll see fire in the live run. Look at what a finding
+> carries.
 >
-> Ordering is severity first, then *ascending effort* — so among equally severe
-> findings, the cheapest fix comes first."
+> A mechanism — why this breaks retrieval, not just what's missing. The
+> evidence we actually observed. The steps to change. And a verification line,
+> so you can confirm the fix worked.
+>
+> A fix that can't be traced back to a mechanism is a guess, so mechanism is a
+> required field on every finding.
+>
+> Ordering is severity first, then ascending effort — so among equally serious
+> findings, the cheapest one to fix comes first."
 
-**SHOW:** `compose_report.py` line 106 and 150, then line 323.
+**SHOW** `compose_report.py` **line 150**, then **line 323**.
 
-> "Beyond the defects, we suggest improvements where nothing is broken. Those
-> are selected against what the site turned out to be — a payments site gets
-> the one about exposing returns, shipping and price validity as data; a
-> documentation site never sees it."
+> **SAY:**
+> "We also suggest improvements where nothing is broken — and those are chosen
+> against what the site turned out to be. A payments site gets this one, about
+> exposing returns and shipping and price validity as data. A documentation
+> site never sees it."
 
 ---
 
-## 2:30 – 3:00 · Why we trust it
+## ⑥ 2:30 – 3:00 · Why we trust any of it
 
-**SHOW:** `tests/` — the file list, then `tests/corpus-d2c.txt` scrolling.
+**SHOW** the `tests/` folder in the file tree, then open `tests/corpus-d2c.txt`
+and scroll it so the volume of sites is visible.
 
-> "Three suites ship with it. Fixtures assert both directions of every check —
-> it must fire on the broken site and stay silent on the clean one. A
-> compliance gate checks the package mechanically, including proving
-> recommend-only from source: it walks the syntax tree of every script and
-> fails on any write request.
+> **SAY:**
+> "Three test suites ship inside the package.
 >
-> And a live suite runs the audit over roughly eight hundred real sites and
-> reports a **firing rate per check** — because a check that fires on
-> everything is worse than useless. That's how we found and fixed seven classes
-> of false positive that every fixture had passed."
+> Fixtures assert both directions of every check — it has to fire on the broken
+> site and stay silent on the clean one. A compliance gate checks the package
+> mechanically, including proving it's recommend-only straight from the source:
+> it walks the syntax tree of every script and fails on any write request.
+>
+> And a live suite runs the audit across roughly eight hundred real websites and
+> reports a firing rate for each check. Because a check that fires on everything
+> is worse than useless.
+>
+> That's how we found and fixed seven separate classes of false positive — every
+> one of which our fixtures had happily passed."
 
 ---
 
-## Screen-capture checklist
+# Screen-capture order
 
-| Order | File (all inside the zip) | Show |
+Open these as tabs before recording, in this order:
+
+| # | File | Line |
 |---|---|---|
-| 1 | `references/failure-modes.md` | the signal/mechanism/check table, line 12 |
-| 2 | `marketplace.json` | whole file — 8 skills, one entrypoint |
-| 3 | `skills/site-acquisition/scripts/classify.py` | lines 114 and 196 |
-| 4 | `lib/auditlib.py` | lines 44 and 51 |
-| 5 | `skills/audit-orchestrator/scripts/compose_report.py` | 22, 34–35, **76** |
-| 6 | `skills/audit-orchestrator/references/severity-model.md` | brief |
-| 7 | `skills/site-acquisition/scripts/analyze.py` | 183 → 213 |
-| 8 | `skills/audit-orchestrator/scripts/compose_report.py` | 106, 150, 323 |
-| 9 | `tests/` + `tests/corpus-d2c.txt` | file list, then scroll the corpus |
+| 1 | `references/failure-modes.md` | 12 |
+| 2 | `marketplace.json` | — |
+| 3 | `skills/site-acquisition/scripts/classify.py` | 114 |
+| 4 | `lib/auditlib.py` | 44 → 51 |
+| 5 | `skills/audit-orchestrator/scripts/compose_report.py` | 22 → 34 → **76** |
+| 6 | `skills/site-acquisition/scripts/analyze.py` | 183 → 213 |
+| 7 | `skills/audit-orchestrator/scripts/compose_report.py` | 150 → 323 |
+| 8 | `tests/` folder | — |
+| 9 | `tests/corpus-d2c.txt` | scroll |
 
-## Cuts if you run long
+# If you run over 3:00
 
-Drop in this order — each is self-contained:
-1. `severity-model.md` (item 6) — the code already made the point
-2. The proactive-recommendation part (item 8)
-3. `classify_site` at line 196 — keep `classify_page` at 114
+Cut in this order — each is self-contained:
 
-## Do not say
+1. The proactive-recommendations lines in ⑤ (`compose_report.py` 150/323)
+2. The second half of ③ (`auditlib.py` line 51, the exempt list)
+3. The last paragraph of ⑥ (keep the first two sentences)
 
-- Don't claim the audit found razorpay blocking AI assistants. Only ByteSpider
-  is blocked; ClaudeBot and ChatGPT are explicitly allowed. That's Part 2's
-  honest story, and Part 1 shouldn't set up a claim Part 2 corrects.
-- Don't describe checks or thresholds that aren't in the zip. Every number in
-  this script is in a file a judge can open.
+# Three things not to say
+
+- **Don't** claim the audit found razorpay blocking AI assistants. Only
+  ByteSpider is blocked; ClaudeBot and ChatGPT are explicitly allowed. Part 2
+  handles that honestly — don't set up a claim Part 2 has to walk back.
+- **Don't** mention any file, threshold or number that isn't in the zip. Every
+  figure in this script is in a file a judge can open.
+- **Don't** say "we tested on 800 sites" while showing a file that isn't the
+  corpus. Show `tests/corpus-d2c.txt` when you say it.
