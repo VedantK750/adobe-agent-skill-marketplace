@@ -62,7 +62,9 @@ EXPECTED_OUTPUT:  ./audit-run/duolingo/audit-report.json
 #   duolingo.com  MR-EMPTY-SHELL (critical). The page cannot be READ: about
 #                 11 KB of HTML behind 14 script tags yields one word of text.
 #   ghost.org     SD-NO-ORGANIZATION (high). Facts have no ENTITY to attach
-#                 to: JSON-LD is present but only WebPage/WebSite types.
+#                 to. Nine JSON-LD blocks are present, marking up the product
+#                 (SoftwareApplication, Review, AggregateRating, Person), but
+#                 no Organization or LocalBusiness node for the company itself.
 #   zerodha.com   AE-NO-DEFINITION (high). No quotable FACT: 932 words on the
 #                 home page and no sentence of the form "Zerodha is a ...".
 #
