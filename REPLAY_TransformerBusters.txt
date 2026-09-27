@@ -6,7 +6,7 @@
 TEST_SITE_URLS:   https://www.duolingo.com/, https://ghost.org/, https://zerodha.com/
 
 LLM_MODEL:        Claude Opus 5 (claude-opus-5, 2026-09)
-AGENT_HARNESS:    Claude Code v2.1.280 (VS Code extension, win32-x64)
+AGENT_HARNESS:    Claude Code v2.1.283 (VS Code extension, win32-x64)
 
 ENV_SETUP:        python3 -m pip install -r requirements.txt
                   # PYTHON COMMAND: this manifest writes `python3`, which is

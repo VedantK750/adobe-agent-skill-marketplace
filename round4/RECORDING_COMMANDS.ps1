@@ -23,7 +23,7 @@
 # PRIMARY - what to record
 # -------------------------------------------------------------------------
 # 1. Open Claude Code in C:\Users\saart\adobe-agent-skill-marketplace
-# 2. Say on camera: "Claude Code v2.1.280 running Claude Opus 5."
+# 2. Say on camera: "Claude Code v2.1.283 running Claude Opus 5."
 # 3. Type this prompt (the URL goes in on camera):
 #
 #    Read marketplace.json, then follow skills/audit-orchestrator/SKILL.md
