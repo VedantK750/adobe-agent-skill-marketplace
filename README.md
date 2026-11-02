@@ -1,5 +1,11 @@
 # Brand AI-Readiness Audit — Agent Skill Marketplace
 
+**Adobe University Hackathon 2026 - Round 3 - Development Round**  
+**Team Members:**
+- **Vedant Krish Shanker** — Delhi Technological University (DTU)
+- **Vasu Mahajan** — Delhi Technological University (DTU)
+- **Saarthak Gupta** — Delhi Technological University (DTU)
+
 Point it at any website. It audits the site read-only and emits one structured
 report of what is hurting the brand's **AI discoverability** (getting found and
 cited) and its **on-site engagement** (keeping the visitor who arrives), each
